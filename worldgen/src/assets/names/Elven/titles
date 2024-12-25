@@ -1,0 +1,10 @@
+
+sovereignty   : * Forrest
+
+male_leader   : King *
+
+female_leader : Queen *
+
+male_lord     : Lord *
+
+female_lord   : Lady *

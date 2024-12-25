@@ -1,0 +1,21 @@
+
+sovereignty   : * Kingdom
+
+male_leader   : King *
+
+female_leader : Queen *
+
+
+male_lord     : Lord *
+male_lord     : Lord *
+male_lord     : Lord *
+male_lord     : Lord *
+male_lord     : Duke *
+male_lord     : General *
+
+female_lord   : Lady *
+female_lord   : Lady *
+female_lord   : Lady *
+female_lord   : Lady *
+female_lord   : Duchess *
+female_lord   : General *

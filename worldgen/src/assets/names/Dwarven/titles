@@ -1,0 +1,10 @@
+
+sovereignty   : * Clan
+
+male_leader   : King *
+
+female_leader : Queen *
+
+male_lord     : Chieftan *
+
+female_lord   : Chieftan *
