@@ -1,2 +1,2 @@
 # IsekaiSimulator
-[test link](https://github.com/Diptipper/IsekaiSimulator/tree/main/worldgen)
+[worldgen](https://github.com/Diptipper/IsekaiSimulator/blob/main/worldgen/readme.md)
