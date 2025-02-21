@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+    MathJax={tex:{inlineMath:[['$','$']],displayMath:[['\\[','\\]']]},svg:{fontCache:'global'}};
+    </script>
+    <script id="MathJax-script" async src="../src/MathJax/es5/tex-mml-chtml.js"></script>
+    <script src="../src/script.js"></script>
+    <title>Isekai Simulator</title>
+    <link rel="stylesheet" href="../src/style.css">
+</head>
+<body>
+<div id="viewport">
+<p id="webheader"></p>
+<hr>
+<div id="nav1"></div>
+<hr>
+<div id="content">
+    This is a compendium dedicated to explaining the tech behind my game. I'm a physicist so I will focus mostly on the mathematical aspect. I will probably also write about Godot implementation if I find something interesting.
+
+    <h2>What is Isekai Simulator?</h2>
+    Isekai Simulator is a game I am still developing. The end goal is to make an open-world game similar to Skyrim but with all of its elements procedurally generated (procgen).
+
+    You see, many procgen games suffer from a common problem: the world is large but shallow. I plan to avoid this curse by making every area, every quest, and worldbuilding interesting. It's very ambitious. Keep reading if you are curious about how I'm doing it.
+
+    <h2>Content</h2>
+    <ul>
+        <li> <a href="geography_node.html">Geography node</a>
+    </ul>
+</div>
+<hr>
+<div id="nav2">
+</div>
+<hr>
+<p id="webfooter"></p>
+</div>
+<script>
+    updatepage(`
+    <b>Next:</b>
+    <a href="geography_node.html">Geography node</a>
+    `);
+</script>
+</body>
+</html>

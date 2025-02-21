@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+    MathJax={tex:{inlineMath:[['$','$']],displayMath:[['\\[','\\]']]},svg:{fontCache:'global'}};
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="../src/script.js"></script>
+    <title>Isekai Simulator</title>
+    <link rel="stylesheet" href="../src/style.css">
+</head>
+<body>
+<div id="viewport">
+<p id="webheader"></p>
+<hr>
+<div id="nav1"></div>
+<hr>
+<div id="content">
+    <h2>Template</h2>
+    
+    <div id="anchors"></div>
+
+    <section label="tile_func">Tile function</section>
+    For a hexagonal tile with lattice spacing $a_\text{lat}=1$, we use the following function to generate the landmass:
+    $$
+    h(x,z) = \exp\left[-\left(\frac{x^2+z^2}{R^2(x,z)}\right)^{16}~\right]
+    $$
+    where $R(x,z)$ is the radial function composed of the hexagonal and the noise part:
+    $$
+    R(x,z) = r\times\left(\text{hex}(x,z)+\lambda~\text{noise}(x,z)\right)
+    $$
+    the coefficient $r$ is the ideal radius of the tile (default value is $0.64$ to allow some overlap) and $\lambda$ is the noise strength (default value is $0.03$). The hexagonal part is defined by
+    $$
+    \text{hex}(x,z) &= \frac{\sqrt{3}}{\sin(t(x,z))+\sqrt{3}\cos(t(x,z))};\\
+    t(x,z)&=t_0(x,z)+\frac{\pi}{6}-\frac{\pi}{3}\left\lfloor\frac{3}{\pi}t_0(x,z)+\frac{1}{2}\right\rfloor,\\
+    t_0(x,z)&=\arctan(z,x)\sim\tan^{-1}\left(\frac{x}{z}\right).
+    $$
+    This function involves rotating a line section 6 times into a hexagon. The noise part is defined by
+    $$
+    \text{noise}(x,z) = 3+\cos(12f\cdot(y+t_0(x,z))) + 2\sin(7f\cdot(y+t_0(x,z)))
+    $$
+    where $f$ is the noise frequency (must be integer for periodicity; default is $1$). The parameter $y$ determine the noise shift which, by default, depends on the tile center
+    $$
+    y = 1.23 + x_\text{tile} + z_\text{tile}^2.
+    $$
+</div>
+<hr>
+<div id="nav2"></div>
+<hr>
+<p id="webfooter"></p>
+</div>
+<script>
+    /*
+    Edit the content of the navigation panels here
+    */
+    updatepage(`
+    <b>Next:</b>
+
+
+    <br>
+    <b>Prev:</b>
+    <a href="home.html">home</a>
+    `);
+</script>
+</body>
+</html>
