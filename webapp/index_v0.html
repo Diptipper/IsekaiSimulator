@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data-Driven Text RPG</title>
+    <style>
+        body {
+            background-color: #121212;
+            color: #33ff33;
+            font-family: 'Courier New', Courier, monospace;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #game-container {
+            width: 800px;
+            height: 600px;
+            border: 2px solid #33ff33;
+            background-color: #000;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 0 15px rgba(51, 255, 51, 0.2);
+        }
+
+        pre {
+            margin: 0;
+            white-space: pre-wrap; 
+            font-size: 16px;
+            line-height: 1.5;
+        }
+
+        #ui-layer { flex: 1; }
+
+        #log-layer {
+            height: 200px;
+            border-top: 1px dashed #336633;
+            padding-top: 10px;
+            margin-top: 20px;
+            overflow-y: auto;
+            color: #88ff88;
+            font-size: 14px;
+        }
+
+        #log-layer::-webkit-scrollbar { width: 8px; }
+        #log-layer::-webkit-scrollbar-thumb { background: #33ff33; }
+        #log-layer::-webkit-scrollbar-track { background: #000; }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="ui-layer"><pre id="main-display"></pre></div>
+    <div id="log-layer"><pre id="log-display"></pre></div>
+</div>
+
+<script>
+    // --- 1. CORE DEFINITIONS ---
+
+	class Skills {
+        constructor(attack, defense, luck) {
+            this.attack = attack;
+            this.defense = defense;
+            this.luck = luck;
+        }
+	}
+
+    class Enemy {
+        constructor(name, hp, loots, skills) {
+            this.name = name;
+            this.hp = hp;
+            this.loots = loots;
+            this.skills = skills;
+        }
+    }
+
+    // --- 2. THE DATA (MAP) ---
+
+    // Define individual enemies outside the map so we can reference them
+    const copperSpider = new Enemy("Copper spider", 10, { "Copper spider legs": 1 }, new Skills(4,2,1));
+
+    /* MAP STRUCTURE 
+       Key Format: "role:internal_id:Display Name"
+       Roles:
+         - scene:   Navigate deeper into this object
+         - return:  Go back up one level
+         - harvest: Trigger harvest loop (Value is [interval, text, drop_dict])
+         - fight:   Trigger fight loop (Value is [interval, text, enemy_dict])
+    */
+    const worldMap = {
+        "scene:open_world:Open World": {
+            "scene:town:Town": {
+                "return:return:Exit town": {},
+            },
+            "scene:logging_camp:Logging camp": {
+                // Note: I removed the extra curly braces around the array to make valid JS
+                "harvest:cut_trees:Cut trees": [1000, "*chop*", { "Oak log": 2, "Branch": 1 }],
+                "return:return:Exit logging camp": {},
+            },
+            "scene:mining_quarry:Mining quarry": {
+                "harvest:mine_ores:Mine ores": [1000, "*clank*", { "Copper ore": 9, "Garnet": 1 }],
+                "fight:spider:Look for trouble": [1000, "*slash*", { "Copper spider": [1, copperSpider] }],
+                "return:return:Exit mining quarry": {},
+            },
+        },
+    };
+
+    // --- 3. UTILITIES ---
+
+    function dictDraw(dct) {
+        let norm = 0;
+        let entries = [];
+        for (let key in dct) {
+            let weight = dct[key];
+            let item = key;
+            if (Array.isArray(weight)) {
+                item = weight[1]; 
+                weight = weight[0];
+            }
+            if (weight < 0) return null;
+            norm += weight;
+            entries.push({ item, weight });
+        }
+        let r = Math.random() * norm;
+        let accWgh = 0;
+        for (let entry of entries) {
+            accWgh += entry.weight;
+            if (r < accWgh) return entry.item;
+        }
+        return null;
+    }
+
+    // --- 4. ENGINE CLASSES ---
+
+    class CharacterMenu {
+        constructor() {
+            this.name = "Player";
+            this.exp = 0;
+            this.inventory = {};
+            this.active = false; 
+            this.hp = 10;
+            this.skills = new Skills(4,2,1);
+        }
+
+        addItem(item, amount = 1) {
+            if (typeof item === 'object' && item.name) item = item.name;
+            this.inventory[item] = (this.inventory[item] || 0) + amount;
+        }
+
+        getLevel() { return Math.floor(Math.sqrt(0.1 * this.exp)); }
+
+        display() {
+            this.active = true;
+            let output = `
+  ------------------------------
+      Character menu
+  ------------------------------
+
+    Name: ${this.name}
+    Level: ${this.getLevel()} (${this.exp}/${10 * Math.pow(this.getLevel() + 1, 2)})
+    HP: ${this.hp}
+            \n`;
+            output += "    Skills:\n";
+            for (let skill in this.skills) output += `      - ${skill}: ${this.skills[skill]}\n`;
+            output += "\n";
+
+            if (Object.keys(this.inventory).length > 0) {
+                output += "    Inventory:\n";
+                for (let item in this.inventory) output += `      - ${item} x ${this.inventory[item]}\n`;
+            } else {
+                output += "    Inventory is empty.\n";
+            }
+            output += "\n[Press Enter or C to return]";
+            return output;
+        }
+    }
+
+    // --- 5. MAIN GAME ENGINE ---
+
+    const Game = {
+        player: new CharacterMenu(),
+        
+        // Navigation State
+        currentNode: null,   // The object representing the current menu
+        currentTitle: "",    // The display name of the current location
+        pathStack: [],       // History for "returning"
+        cursor: 0,
+        
+        // Action State
+        activeInterval: null,
+        currentActionName: "", // To track toggle state (e.g., stopping chopping)
+
+        init: function() {
+            // Start inside the Open World wrapper
+            // We grab the first key of the map to start
+            const startKey = Object.keys(worldMap)[0]; 
+            this.enterScene(startKey, worldMap[startKey]);
+            this.setupInput();
+        },
+
+        // --- PARSING & NAVIGATION ---
+
+        parseKey: function(keyString) {
+            const parts = keyString.split(':');
+            return {
+                role: parts[0],
+                id: parts[1],
+                name: parts[2] || parts[1] // Fallback if no display name
+            };
+        },
+
+        enterScene: function(keyString, nodeObj) {
+            const info = this.parseKey(keyString);
+            
+            // Push previous state to stack (if not initial)
+            if (this.currentNode) {
+                this.pathStack.push({
+                    node: this.currentNode,
+                    title: this.currentTitle,
+                    cursor: this.cursor
+                });
+            }
+
+            this.currentNode = nodeObj;
+            this.currentTitle = info.name;
+            this.cursor = 0;
+            this.stopAction(); // Stop any actions when changing scenes
+            this.render();
+        },
+
+        returnScene: function() {
+            if (this.pathStack.length === 0) return;
+            
+            const previous = this.pathStack.pop();
+            this.currentNode = previous.node;
+            this.currentTitle = previous.title;
+            this.cursor = previous.cursor;
+            this.stopAction();
+            this.render();
+        },
+
+        // --- RENDERER ---
+
+        render: function() {
+            const display = document.getElementById('main-display');
+            
+            // If Character Menu is active, show that instead
+            if (this.player.active) {
+                display.textContent = this.player.display();
+                return;
+            }
+
+            let output = `
+  ------------------------------
+      ${this.currentTitle}
+  ------------------------------
+            \n`;
+            
+            const options = Object.keys(this.currentNode);
+            
+            if(options.length === 0) {
+                output += "    (Nothing here...)";
+            }
+
+            options.forEach((key, index) => {
+                const info = this.parseKey(key);
+                let line = `    ${info.name}`;
+                
+                // Add indicator if this action is currently active
+                if (this.activeInterval && this.currentActionName === key) {
+                     line += " (Press Enter/Esc to stop)";
+                }
+
+                if (index === this.cursor) {
+                    output += `  ▶ ${line.trim()}\n`;
+                } else {
+                    output += `    ${line.trim()}\n`;
+                }
+            });
+
+            display.textContent = output;
+        },
+
+        log: function(msg) {
+            const logEl = document.getElementById('log-display');
+            logEl.textContent = msg + "\n" + logEl.textContent;
+            logEl.scrollTop = logEl.scrollHeight;
+        },
+
+        // --- ACTIONS ---
+
+        stopAction: function() {
+            if (this.activeInterval) {
+                clearInterval(this.activeInterval);
+                this.activeInterval = null;
+                this.currentActionName = "";
+                //this.log("[Action Stopped]");
+                this.render(); // Re-render to remove (Active) tag
+            }
+        },
+
+        executeOption: function() {
+            const keys = Object.keys(this.currentNode);
+            if (keys.length === 0) return;
+
+            const selectedKey = keys[this.cursor];
+            const selectedValue = this.currentNode[selectedKey];
+            const info = this.parseKey(selectedKey);
+
+            // Toggle Logic: If clicking the same action that is running, stop it.
+            if (this.activeInterval && this.currentActionName === selectedKey) {
+                this.stopAction();
+                return;
+            }
+
+            // Logic Switch based on Role
+            switch (info.role) {
+                case "scene":
+                    this.enterScene(selectedKey, selectedValue);
+                    break;
+                case "return":
+                    this.returnScene();
+                    break;
+                case "harvest":
+                    this.stopAction(); // Stop previous action if any
+                    //this.log("[Press Enter to stop]");
+                    this.currentActionName = selectedKey;
+                    // value format: [interval, text, drops]
+                    this.startHarvestLoop(selectedValue[0], selectedValue[1], selectedValue[2]);
+                    this.render();
+                    break;
+                case "fight":
+                    this.stopAction();
+                    //this.log("[Press Enter to stop]");
+                    this.currentActionName = selectedKey;
+                    // value format: [interval, text, enemies]
+                    this.startFightLoop(selectedValue[0], selectedValue[1], selectedValue[2]);
+                    this.render();
+                    break;
+                default:
+                    this.log(`Unknown role: ${info.role}`);
+            }
+        },
+
+        startHarvestLoop: function(interval, notif, itemDict) {
+            this.activeInterval = setInterval(() => {
+                const item = dictDraw(itemDict);
+                if (item) {
+                    this.player.addItem(item);
+                    this.log(`  ${notif} ${item} + 1`);
+                }
+            }, interval);
+        },
+
+        startFightLoop: function(interval, notif, enemyDict) {
+            let enemyTemplate = dictDraw(enemyDict); 
+            // Create fresh instance
+            let enemy = new Enemy(enemyTemplate.name, enemyTemplate.hp, enemyTemplate.loots, enemyTemplate.skills);
+            let turn = 0; // 0 = player, 1 = enemy
+            enemy_hp = enemy.hp
+            player_hp = this.player.hp
+            this.activeInterval = setInterval(() => {
+                if (enemy_hp <= 0) {
+                    let loot = dictDraw(enemy.loots);
+                    this.player.addItem(loot);
+                    this.log(`  *${enemy.name} defeated* ${loot} + 1`);
+                    this.stopAction();
+                    return;
+                }
+                if (player_hp <= 0) {
+                    this.log(`  *${this.player.name} defeated*`);
+                    this.log(`  *retreat from the battle*`);
+                    this.stopAction();
+                    return;
+                }
+                if (turn === 1) {
+                    // Enemy Attacks
+                    if (Math.random() < 1-Math.exp(-enemy.skills.luck)) {
+                        player_hp -= Math.max(0,enemy.skills.attack-this.player.skills.defense);
+                        this.log(` ${this.player.name}[hp:${player_hp}/${this.player.hp}] <-- ${enemy.name}[hp:${enemy_hp}/${enemy.hp}] `);
+                    } else {
+                        this.log(` ${this.player.name}[hp:${player_hp}/${this.player.hp}] x-- ${enemy.name}[hp:${enemy_hp}/${enemy.hp}] `);
+                    }
+                    turn = 0;
+                } else {
+                    // Player Attacks
+                    if (Math.random() < 1-Math.exp(-this.player.skills.luck)) {
+                        enemy_hp -= Math.max(0,this.player.skills.attack-enemy.skills.defense);
+                        this.player.exp += 1;
+                        this.log(` ${this.player.name}[hp:${player_hp}/${this.player.hp}] --> ${enemy.name}[hp:${enemy_hp}/${enemy.hp}] `);
+                    } else {
+                        this.log(` ${this.player.name}[hp:${player_hp}/${this.player.hp}] --x ${enemy.name}[hp:${enemy_hp}/${enemy.hp}] `);
+                    }
+                    turn = 1;
+                }
+            }, interval);
+        },
+
+        // --- INPUT ---
+
+        setupInput: function() {
+            document.addEventListener('keydown', (e) => {
+                // Navigation
+                if (e.key === "ArrowUp") {
+                    if (!this.player.active) {
+                        const max = Object.keys(this.currentNode).length;
+                        if(max > 0) {
+                            this.cursor = (this.cursor - 1 + max) % max;
+                            this.render();
+                        }
+                    }
+                } else if (e.key === "ArrowDown") {
+                    if (!this.player.active) {
+                        const max = Object.keys(this.currentNode).length;
+                        if(max > 0) {
+                            this.cursor = (this.cursor + 1) % max;
+                            this.render();
+                        }
+                    }
+                } 
+                // Confirm / Enter
+                else if (e.key === "Enter") {
+                    if (this.player.active) {
+                        this.player.active = false; // Close menu
+                        this.render();
+                    } else {
+                        this.executeOption();
+                    }
+                } 
+                // Character Menu
+                else if (e.key.toLowerCase() === "c") {
+                    this.player.active = !this.player.active;
+                    this.render();
+                } 
+                // Escape
+                else if (e.key === "Escape") {
+                    this.stopAction();
+                }
+            });
+        }
+    };
+
+    Game.init();
+
+</script>
+
+</body>
+</html>
