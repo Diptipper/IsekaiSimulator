@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vertical RPG UI - Stat Breakdown</title>
+    <title>Vertical RPG - Dungeon System Fixed</title>
     <style>
         :root {
             --bg-color: #1e1e1e;
@@ -12,291 +12,155 @@
             --hp-color: #ff4d4d;
             --enemy-hp-color: #ff4757;
             --exp-color: #ffd700;
+            --dungeon-color: #9b59b6; /* Purple for dungeon progress */
             --text-main: #eee;
             --font-main: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             --font-mono: 'Courier New', monospace;
         }
 
         body {
-            background-color: #000;
-            color: var(--text-main);
-            font-family: var(--font-main);
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            overflow: hidden;
+            background-color: #000; color: var(--text-main); font-family: var(--font-main);
+            margin: 0; padding: 0; display: flex; justify-content: center; align-items: center;
+            height: 100vh; overflow: hidden;
         }
 
         #game-device {
-            width: 100%;
-            max-width: 400px;
-            height: 100%;
-            max-height: 800px;
-            background-color: var(--bg-color);
-            display: flex;
-            flex-direction: column;
-            position: relative;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
-            border: 1px solid #333;
+            width: 100%; max-width: 400px; height: 100%; max-height: 800px;
+            background-color: var(--bg-color); display: flex; flex-direction: column; position: relative;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5); border: 1px solid #333;
         }
 
-        /* --- TOP PANEL (Graphics & Logs) --- */
+        /* --- VISUAL PANEL (Top Screen) --- */
         #visual-panel {
-            flex: 6; 
-            position: relative;
-            background-color: #000;
-            overflow: hidden;
-            border-bottom: 4px solid var(--panel-bg);
+            flex: 6; position: relative; background-color: #000;
+            overflow: hidden; border-bottom: 4px solid #444;
         }
 
-        #scene-image {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            opacity: 0.7; 
-            transition: opacity 0.3s;
+        .bg-image-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
+        .bg-image-fit { width: 100%; height: 100%; object-fit: cover; opacity: 0.7; transition: opacity 0.3s; }
+
+        .missing-asset-placeholder {
+            display: flex; justify-content: center; align-items: center;
+            background-color: rgba(40, 40, 40, 0.85); border: 2px dashed #777; color: var(--accent);
+            font-family: var(--font-mono); font-size: 12px; font-weight: bold;
+            text-align: center; padding: 10px; box-sizing: border-box;
+            overflow-wrap: break-word; box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+        .bg-image-container .missing-asset-placeholder { width: 100%; height: 100%; opacity: 0.7; }
+        .sprite-wrapper .missing-asset-placeholder { width: 150px; height: 250px; }
+
+        /* --- VISUAL DIALOGUE LAYER (Sprites Only) --- */
+        #dialogue-visual-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 50; display: none;
+        }
+        #dialogue-visual-layer.active { display: block; }
+
+        #sprite-container {
+            position: absolute; top:0; left:0; width:100%; height:100%;
+            z-index: 52; overflow: hidden; pointer-events: none;
         }
         
-        #scene-image:after {
-            content: 'Image not found';
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
-            height: 100%;
-            background: radial-gradient(circle, #333 0%, #000 100%);
-            position: absolute;
-            top: 0; left: 0;
-            z-index: -1;
+        .sprite-wrapper {
+            position: absolute; bottom: 0; display: flex; justify-content: center;
+            transition: left 0.5s ease-out, bottom 0.5s ease-out, transform 0.5s ease-out;
+        }
+        .character-sprite {
+            position: relative; width: auto; height: 80vh; max-height: 500px;
+            filter: drop-shadow(0 0 10px rgba(0,0,0,0.5)); transition: opacity 0.3s;
+        }
+        .anim-fade-in { opacity: 0; animation: fadeIn 0.8s forwards; }
+        .anim-fade-out { opacity: 1; animation: fadeOut 0.8s forwards; }
+        .anim-shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+        
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-2px, 0, 0); } 20%, 80% { transform: translate3d(4px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-6px, 0, 0); } 40%, 60% { transform: translate3d(6px, 0, 0); }
         }
 
-        /* --- HUD OVERLAY --- */
-        #hud-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            padding: 10px;
-            box-sizing: border-box;
-            background: linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0) 100%);
-            z-index: 20;
-            font-family: var(--font-mono);
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-            pointer-events: none;
-        }
-
-        #enemy-hud {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            padding: 15px;
-            box-sizing: border-box;
-            background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0) 100%);
-            z-index: 20;
-            font-family: var(--font-mono);
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.3s ease-in-out;
-        }
-
-        #enemy-hud.visible { opacity: 1; }
-
-        .hud-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            width: 100%;
-        }
-
-        .hud-text {
-            font-weight: bold;
-            font-size: 14px;
-            color: #fff;
-            text-shadow: 1px 1px 2px black;
-        }
-
-        #menu-toggle-btn {
-            pointer-events: auto;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid #555;
-            color: #eee;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 11px;
-            cursor: pointer;
-            text-transform: uppercase;
-            font-weight: bold;
-            transition: background 0.2s;
-        }
-        #menu-toggle-btn:hover {
-            background: var(--accent);
-            color: #000;
-            border-color: var(--accent);
-        }
-
-        .bar-container {
-            flex-grow: 1;
-            height: 8px;
-            background: rgba(255,255,255,0.2);
-            border-radius: 4px;
-            overflow: hidden;
+        /* --- CONTROL PANEL (Bottom Screen) --- */
+        #control-panel { 
+            flex: 4; background-color: var(--panel-bg); 
             position: relative;
-            border: 1px solid rgba(0,0,0,0.5);
-            margin-left: 10px;
+            display: flex; flex-direction: column; overflow: hidden; 
         }
 
-        .bar-fill {
-            height: 100%;
-            width: 100%;
-            transition: width 0.3s ease-out;
+        #menu-list { 
+            padding: 15px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; height: 100%; 
+            box-sizing: border-box;
         }
 
-        .hp-fill { background-color: var(--hp-color); }
-        .exp-fill { background-color: var(--exp-color); }
-        .enemy-fill { background-color: var(--enemy-hp-color); }
-
-        #location-pill {
-            position: absolute;
-            top: 80px; 
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0,0,0,0.6);
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            border: 1px solid #555;
-            z-index: 10;
-            opacity: 0.8;
+        /* --- DIALOGUE TEXT BOX --- */
+        #dialogue-box {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #222; 
+            padding: 20px; box-sizing: border-box;
+            z-index: 100; display: none; flex-direction: column;
+            border-left: 4px solid var(--accent);
+            cursor: pointer;
         }
+        #dialogue-box.active { display: flex; }
 
-        #toast-container {
-            position: absolute;
-            bottom: 60px;
-            left: 20px;
-            right: 20px;
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-end;
-            align-items: flex-start;
-            pointer-events: none;
-            gap: 5px;
-            height: 30%;
-            overflow: hidden;
+        #speaker-name { font-weight: bold; color: var(--accent); font-size: 16px; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
+        #dialogue-text { color: #fff; font-size: 16px; line-height: 1.5; font-family: var(--font-main); flex-grow: 1; }
+        
+        #dialogue-questions {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.9); z-index: 105;
+            display: none; flex-direction: column; justify-content: center; align-items: center; gap: 15px;
         }
+        #dialogue-questions.active { display: flex; }
 
-        .toast {
-            background-color: rgba(0, 0, 0, 0.85);
-            color: #fff;
-            padding: 6px 10px;
-            border-radius: 4px;
-            border-left: 3px solid var(--accent);
-            font-size: 12px;
-            font-family: var(--font-mono);
-            animation: fadeSequence 2.5s forwards;
-            max-width: 90%;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        .choice-btn {
+            background: #333; border: 1px solid #666; color: white; padding: 15px 25px; width: 80%;
+            text-align: center; cursor: pointer; border-radius: 4px; transition: all 0.2s; font-family: var(--font-mono);
         }
+        .choice-btn:hover { background: var(--accent); color: black; border-color: white; transform: scale(1.05); }
 
-        @keyframes fadeSequence {
-            0% { opacity: 0; transform: translateY(10px); }
-            10% { opacity: 1; transform: translateY(0); }
-            80% { opacity: 1; }
-            100% { opacity: 0; display: none; }
-        }
-
-        /* --- BOTTOM PANEL (Controls) --- */
-        #control-panel {
-            flex: 4;
-            background-color: var(--panel-bg);
-            padding: 15px;
-            display: flex;
-            flex-direction: column;
-            overflow-y: auto;
-        }
-
-        #menu-list {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
+        /* --- UI ELEMENTS --- */
         .menu-item {
-            padding: 12px 15px;
-            background-color: #383838;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border: 1px solid transparent;
+            padding: 12px 15px; background-color: #383838; border-radius: 8px; cursor: pointer; transition: all 0.2s;
+            display: flex; justify-content: space-between; align-items: center; border: 1px solid transparent;
         }
+        .menu-item.active { background-color: #eee; color: #000; border-color: var(--accent); transform: scale(1.02); font-weight: bold; }
+        .menu-item-tag { font-size: 10px; background: #ff4d4d; color: white; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; font-weight: bold; }
+        .insufficient { font-size: 11px; color: #ff4d4d; margin-left: 10px; font-style: italic; }
 
-        .menu-item.active {
-            background-color: #eee;
-            color: #000;
-            border-color: var(--accent);
-            transform: scale(1.02);
-            font-weight: bold;
-        }
-
-        .menu-item-tag {
-            font-size: 10px;
-            background: #ff4d4d;
-            color: white;
-            padding: 2px 6px;
-            border-radius: 4px;
-            text-transform: uppercase;
-            font-weight: bold;
-        }
-
-        .insufficient {
-            font-size: 11px;
-            color: #ff4d4d;
-            margin-left: 10px;
-            font-style: italic;
-        }
+        #hud-overlay { position: absolute; top: 0; left: 0; width: 100%; padding: 10px; box-sizing: border-box; background: linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0) 100%); z-index: 20; font-family: var(--font-mono); display: flex; flex-direction: column; gap: 5px; pointer-events: none; }
+        #enemy-hud { position: absolute; bottom: 0; left: 0; width: 100%; padding: 15px; box-sizing: border-box; background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0) 100%); z-index: 20; font-family: var(--font-mono); display: flex; flex-direction: column; gap: 5px; pointer-events: none; opacity: 0; transition: opacity 0.3s; }
+        #enemy-hud.visible { opacity: 1; }
         
-        /* INVENTORY STYLES */
-        .inv-btn {
-            background: #444;
-            border: 1px solid #666;
-            color: white;
-            font-size: 10px;
-            padding: 2px 6px;
-            cursor: pointer;
-            margin-left: 8px;
-            border-radius: 3px;
-        }
+        .hud-row { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+        .hud-text { font-weight: bold; font-size: 14px; color: #fff; text-shadow: 1px 1px 2px black; }
+        
+        /* BOSS STYLES */
+        .boss-name { color: #ff4d4d; text-shadow: 0 0 5px red; font-size: 16px; }
+        .boss-name::before { content: "💀 "; }
+
+        #menu-toggle-btn { pointer-events: auto; background: rgba(255, 255, 255, 0.1); border: 1px solid #555; color: #eee; padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; text-transform: uppercase; font-weight: bold; transition: background 0.2s; }
+        #menu-toggle-btn:hover { background: var(--accent); color: #000; border-color: var(--accent); }
+
+        .bar-container { flex-grow: 1; height: 8px; background: rgba(255,255,255,0.2); border-radius: 4px; overflow: hidden; position: relative; border: 1px solid rgba(0,0,0,0.5); margin-left: 10px; }
+        .bar-fill { height: 100%; width: 100%; transition: width 0.3s ease-out; }
+        .hp-fill { background-color: var(--hp-color); } .exp-fill { background-color: var(--exp-color); } .enemy-fill { background-color: var(--enemy-hp-color); }
+        .dungeon-fill { background-color: var(--dungeon-color); }
+
+        #dungeon-progress-row { opacity: 0; transition: opacity 0.5s; }
+        #dungeon-progress-row.visible { opacity: 1; }
+
+        #location-pill { position: absolute; top: 100px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.6); padding: 4px 12px; border-radius: 12px; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; border: 1px solid #555; z-index: 10; opacity: 0.0; }
+        #location-pill.visible{ opacity: 0.8; }
+        #toast-container { position: absolute; bottom: 80px; left: 20px; right: 20px; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; pointer-events: none; gap: 5px; height: 30%; overflow: hidden; z-index: 25; }
+        .toast { background-color: rgba(0, 0, 0, 0.85); color: #fff; padding: 6px 10px; border-radius: 4px; border-left: 3px solid var(--accent); font-size: 12px; font-family: var(--font-mono); animation: fadeSequence 2.5s forwards; max-width: 90%; box-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+        @keyframes fadeSequence { 0% { opacity: 0; transform: translateY(10px); } 10% { opacity: 1; transform: translateY(0); } 80% { opacity: 1; } 100% { opacity: 0; display: none; } }
+        
+        .inv-btn { background: #444; border: 1px solid #666; color: white; font-size: 10px; padding: 2px 6px; cursor: pointer; margin-left: 8px; border-radius: 3px; }
         .inv-btn:hover { background: var(--accent); color: black; }
-        .equip-slot {
-            background: rgba(0,0,0,0.3);
-            padding: 5px;
-            border-radius: 4px;
-            margin-bottom: 5px;
-            display:flex; justify-content:space-between; align-items:center;
-            border: 1px solid transparent; 
-        }
-        
-        /* Focused row in inventory menu */
-        .menu-focus-row {
-            border-color: var(--accent) !important;
-            background-color: rgba(255, 255, 255, 0.1) !important;
-        }
-
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-thumb { background: #555; border-radius: 2px; }
+        .equip-slot { background: rgba(0,0,0,0.3); padding: 5px; border-radius: 4px; margin-bottom: 5px; display:flex; justify-content:space-between; align-items:center; border: 1px solid transparent; }
+        .menu-focus-row { border-color: var(--accent) !important; background-color: rgba(255, 255, 255, 0.1) !important; }
+        ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: #555; border-radius: 2px; }
     </style>
 </head>
 <body>
@@ -304,792 +168,427 @@
 <div id="game-device">
     <div id="visual-panel">
         <div id="hud-overlay">
-            <div class="hud-row">
-                <span id="player-name" class="hud-text">Player Lv.1</span>
-                <div id="menu-toggle-btn">🎒 Bag (C)</div>
-            </div>
-            <div class="hud-row">
-                <span style="font-size:10px; width:20px;">HP</span>
-                <div class="bar-container">
-                    <div id="hud-hp-bar" class="bar-fill hp-fill" style="width: 100%;"></div>
-                </div>
-            </div>
-            <div class="hud-row">
-                <span style="font-size:10px; width:20px;">EXP</span>
-                <div class="bar-container">
-                    <div id="hud-exp-bar" class="bar-fill exp-fill" style="width: 0%;"></div>
-                </div>
-            </div>
+             <div class="hud-row"><span id="player-name" class="hud-text">Player Lv.1</span><div id="menu-toggle-btn">Stats (C)</div></div>
+             <div class="hud-row"><span style="font-size:10px; width:20px;">HP</span><div class="bar-container"><div id="hud-hp-bar" class="bar-fill hp-fill" style="width: 100%;"></div></div></div>
+             <div class="hud-row"><span style="font-size:10px; width:20px;">EXP</span><div class="bar-container"><div id="hud-exp-bar" class="bar-fill exp-fill" style="width: 0%;"></div></div></div>
+             <div class="hud-row" id="dungeon-progress-row"><span style="font-size:10px; width:20px;">DGN</span><div class="bar-container"><div id="hud-dungeon-bar" class="bar-fill dungeon-fill" style="width: 0%;"></div></div></div>
         </div>
 
         <div id="enemy-hud">
-            <div class="hud-row">
-                <span id="enemy-name" class="hud-text">Enemy Name</span>
-                <span id="enemy-stats" style="font-size:12px; color:#ccc;"></span>
+             <div class="hud-row"><span id="enemy-name" class="hud-text">Enemy Name</span><span id="enemy-stats" style="font-size:12px; color:#ccc;"></span></div>
+             <div class="hud-row" style="margin-top:5px;"><div class="bar-container" style="margin-left:0;"><div id="enemy-hp-bar" class="bar-fill enemy-fill" style="width: 100%;"></div></div></div>
+        </div>
+
+        <div id="dialogue-visual-layer">
+            <div id="dialogue-bg-container" class="bg-image-container">
+                <img id="dialogue-bg" class="bg-image-fit" src="" alt="">
             </div>
-            <div class="hud-row" style="margin-top:5px;">
-                <div class="bar-container" style="margin-left:0;">
-                    <div id="enemy-hp-bar" class="bar-fill enemy-fill" style="width: 100%;"></div>
-                </div>
-            </div>
+            <div id="sprite-container"></div>
         </div>
 
         <div id="location-pill">Loading...</div>
-        <img id="scene-image" src="" alt="Scene" onerror="this.style.opacity='0.2'">
+        <div id="scene-bg-container" class="bg-image-container" style="z-index: 1;">
+             <img id="scene-image" class="bg-image-fit" src="" alt="Scene">
+        </div>
         <div id="toast-container"></div>
     </div>
 
     <div id="control-panel">
         <div id="menu-list"></div>
+
+        <div id="dialogue-box" onclick="Game.advanceDialogue()">
+            <div id="speaker-name">Speaker</div>
+            <div id="dialogue-text">...</div>
+            <div style="font-size: 11px; color: #666; text-align: right; margin-top:5px; border-top:1px solid #444; padding-top:5px;">(Click or Enter to continue)</div>
+        </div>
+
+        <div id="dialogue-questions"></div>
     </div>
 </div>
 
 <script>
     // --- 1. CORE DEFINITIONS ---
-
-    class Skills {
-        constructor(attack, defense, healing, luck) {
-            this.attack = attack;
-            this.defense = defense;
-            this.healing = healing;
-            this.luck = luck;
-        }
-        add(other) {
-            return new Skills(
-                this.attack + other.attack,
-                this.defense + other.defense,
-                this.healing + other.healing,
-                this.luck + other.luck
-            );
-        }
-    }
-
-    class Item {
-        constructor(name, is_weapon, is_armor_body, is_armor_leggings, amount, bonus_hp, bonus_skills) {
-            this.name = name;
-            this.is_weapon = is_weapon;
-            this.is_armor_body = is_armor_body;
-            this.is_armor_leggings = is_armor_leggings;
-            this.amount = amount;
-            this.bonus_hp = bonus_hp;
-            this.bonus_skills = bonus_skills || new Skills(0,0,0,0);
-        }
-    }
-
-    const ITEM_DEFINITIONS = {
-        "Copper dagger": { 
-            is_weapon: true, is_armor_body: false, is_armor_leggings: false, 
-            bonus_hp: 0, bonus_skills: new Skills(2, 0, 0, 1) 
-        },
-        "Leather vest": { 
-            is_weapon: false, is_armor_body: true, is_armor_leggings: false, 
-            bonus_hp: 5, bonus_skills: new Skills(0, 2, 0, 0) 
-        },
-        "Leather pants": { 
-            is_weapon: false, is_armor_body: false, is_armor_leggings: true, 
-            bonus_hp: 2, bonus_skills: new Skills(0, 1, 0, 1) 
-        }
-    };
-
-    class Enemy {
-        constructor(name, hp, loots, skills) {
-            this.name = name;
-            this.hp = hp;
-            this.maxHp = hp; 
-            this.loots = loots;
-            this.skills = skills;
-        }
-    }
+    class Skills { constructor(a, d, h, l) { this.attack=a; this.defense=d; this.healing=h; this.luck=l; } add(o) { return new Skills(this.attack+o.attack, this.defense+o.defense, this.healing+o.healing, this.luck+o.luck); }}
+    class Item { constructor(n, w, b, l, a, hp, sk) { this.name=n; this.is_weapon=w; this.is_armor_body=b; this.is_armor_leggings=l; this.amount=a; this.bonus_hp=hp; this.bonus_skills=sk||new Skills(0,0,0,0); }}
+    const ITEM_DEFINITIONS = { "Copper dagger": { is_weapon:true, bonus_skills:new Skills(2,0,0,1) }, "Leather vest": { is_armor_body:true, bonus_hp:5, bonus_skills:new Skills(0,2,0,0) }, "Leather pants": { is_armor_leggings:true, bonus_hp:2, bonus_skills:new Skills(0,1,0,1) }};
+    class Enemy { constructor(n, hp, loots, skills) { this.name=n; this.hp=hp; this.maxHp=hp; this.loots=loots; this.skills=skills; }}
 
     // --- 2. DATA ---
+    const GlobalState = { metGuard: false };
+
+    const introDialogue = {
+        "repeating": false, "played": false, "background": "heaven_clouds.png", 
+        "data": [
+            ["dialogue","Goddess","Dear Hero, yesterday, you died in a car accident in your world.",
+                ["goddess.png","(50%,0%)","fade in"]],
+            ["dialogue","You","Huh? Is this another one of those Isekai bullshit that was popular a decade ago?",["goddess.png","(50%,0%)","shake"]],
+            ["dialogue","Goddess","Yes, yes. Calm down. You already know the drill.",["goddess.png","(80%,0%)","translate"]],
+            ["dialogue","Goddess","Alright, I will send you down to another world.",["goddess.png","(20%,0%)","translate"]],
+            ["dialogue","Goddess","Oh. I almost forget. You can press C, or click the button on the top-right of the screen, to see your stats and equipments.",["goddess.png","(50%,0%)","translate"]],
+            ["dialogue","Goddess","Have fun there, my hero. And don't cause any trouble.",["goddess.png","(50%,0%)","fade out"]],
+        ]
+    };
+
+
+    const introCombatDialogue = {
+        "repeating": false, "played": false, "background": "heaven_clouds.png", 
+        "data": [
+            ["dialogue","Goddess","During the combat, the attacker rolls the dice.",["goddess.png","(50%,0%)","fade in"]],
+            ["dialogue","Goddess","If the number is greater than probability governed by the attacker's Luck stat, the attack is landed.",["goddess.png","(50%,0%)","translate"]],
+            ["dialogue","Goddess","The damage is given by the attacker's Attack subtracted by the receiver's Defense.",["goddess.png","(50%,0%)","translate"]],
+            ["dialogue","Goddess","Good luck, Hero.",["goddess.png","(-50%,0%)","fade out"]],
+        ]
+    };
+
+    const guardDialogue = {
+        "repeating": true, "background": "town_gate_bg.png",
+        "data": [
+            ["dialogue","Guard1","Halt!",["guard1.png","(10%,0%)","fade in"]],
+            ["dialogue","Guard2","Who goes there?",["guard2.png","(90%,0%)","fade in"]],
+            ["question","Guard1","State your business.",["guard1.png","(10%,0%)","translate"]
+                    ,{  "I am an adventurer": "adventurer",
+                        "Just passing through": "passerby" }],
+            ["dialogue","Guard1","Alright! you may enter",["guard1.png","(10%,0%)","shake"]],
+        ]
+    };
 
     const copperSpider = new Enemy("Copper spider", 10, { "Copper spider legs": 1 }, new Skills(4,2,0,1));
+    const copperSpiderBoss = new Enemy("Giant Copper spider", 20, { "Copper spider legs": 1 }, new Skills(6,3,0,2));
 
     const worldMap = {
         "scene:open_world:Open World:world_map.png": {
-            "scene:town:Town:town_square.png": {
-                "scene:blacksmith:Blacksmith:icon_anvil.png": {
-                    "craft:smelt_ore:Smelt ore:icon_anvil.png": [1000, "Smelting ores...", {
-                        "input:Oak log": 0.5, "input:Copper ore": 1, "output:Copper ingot": 1 }],
-                    "craft:craft_dagger:Copper dagger:icon_hammer.png": [1000, "Crafting...", {
-                        "input:Copper ingot": 1, "output:Copper dagger": 1 }],
-                    "return:return:Exit shop:icon_exit.png": {},
+            "starting_dialogue": [introDialogue],
+            "scene:town:➡️ To Town:town_square.png": {
+                "dialogue:guard chat:💬 Talk to Guard:icon_shield.png": [guardDialogue],
+                "scene:blacksmith:➡️ To Blacksmith:icon_anvil.png": {
+                    "craft:smelt ore:🔨 Smelt ore:icon_anvil.png": [1000, "Smelting ores...", { "input:Oak log": 0.5, "input:Copper ore": 1, "output:Copper ingot": 1 }],
+                    "craft:craft dagger:🔨 Copper dagger:icon_hammer.png": [1000, "Crafting...", { "input:Copper ingot": 1, "output:Copper dagger": 1 }],
+                    "return:return:🔙 Exit shop:icon_exit.png": {},
                 },
-                "return:return:Exit town:icon_exit.png": {},
+                "return:return:🔙 Exit town:icon_exit.png": {},
             },
-            "scene:logging_camp:Logging camp:forest_clearing.png": {
-                "harvest:cut_trees:Cut trees:icon_axe.png": [1000, "Chopping wood...", { "Oak log": 2, "Branch": 1 }],
-                "return:return:Exit logging camp:icon_exit.png": {},
+            "scene:logging camp:➡️ To Logging camp:forest_clearing.png": {
+                "harvest:cut trees:🪓 Cut tree:icon_axe.png": [1000, "Chopping wood...", { "Oak log": 2, "Branch": 1 }],
+                "return:return:🔙 Exit logging camp:icon_exit.png": {},
             },
-            "scene:mining_quarry:Mining quarry:quarry_dark.png": {
-                "harvest:mine_ores:Mine ores:icon_pickaxe.png": [1000, "Mining rocks...", { "Copper ore": 9, "Garnet": 1 }],
-                "fight:spider:Look for trouble:icon_sword.png": [1000, "Fighting...", { "Copper spider": [1, copperSpider] }],
-                "return:return:Exit mining quarry:icon_exit.png": {},
+            "scene:mining quarry:➡️ To Mining quarry:quarry_dark.png": {
+                "starting_dialogue": [introCombatDialogue],
+                "harvest:mine ores:⛏️ Mine ores:icon_pickaxe.png": [1000, "Mining rocks...", { "Copper ore": 9, "Garnet": 1 }],
+                "fight:spider:⚔️ Fight something:icon_sword.png": [1000, "Fighting...", { "Copper spider": [1, copperSpider] }],
+                "return:return:🔙 Exit mining quarry:icon_exit.png": {},
+            },
+            "scene:abandoned cave:➡️ To Abandoned Cave:cave_dark.png": {
+                "starting_dialogue": [introCombatDialogue],
+                "dungeon:cave dungeon:🦇 Enter the dungeon:icon_sword.png":
+                [
+                    [1000, "Fighting...", { "Copper spider": [1, copperSpider] }],
+                    [1000, "Fighting...", { "Copper spider": [1, copperSpider] }],
+                    [1000, "Fighting Boss...", { "Giant Copper spider": [1, copperSpiderBoss] }]
+                ],
+                "return:return:🔙 Exit the cave:icon_exit.png": {},
             },
         },
     };
 
     // --- 3. UTILITIES ---
-
-    function dictDraw(dct) {
-        let norm = 0;
-        let entries = [];
-        for (let key in dct) {
-            let weight = dct[key];
-            let item = key;
-            if (Array.isArray(weight)) {
-                item = weight[1]; 
-                weight = weight[0];
-            }
-            if (weight < 0) return null;
-            norm += weight;
-            entries.push({ item, weight });
-        }
-        let r = Math.random() * norm;
-        let accWgh = 0;
-        for (let entry of entries) {
-            accWgh += entry.weight;
-            if (r < accWgh) return entry.item;
-        }
-        return null;
-    }
+    function dictDraw(dct) { let norm=0; let entries=[]; for(let key in dct){ let w=dct[key]; let i=key; if(Array.isArray(w)){ i=w[1]; w=w[0]; } if(w<0) return null; norm+=w; entries.push({item:i, weight:w}); } let r=Math.random()*norm; let acc=0; for(let e of entries){ acc+=e.weight; if(r<acc) return e.item; } return null; }
+    function createFloatingTextPlaceholder(filename, extraClasses = "") { const div = document.createElement('div'); div.className = `missing-asset-placeholder ${extraClasses}`; div.innerText = `FILE NOT FOUND:\n${filename}`; return div; }
+    function safelySetBackgroundImage(containerId, imgId, basePath, filename) { const container = document.getElementById(containerId); const img = document.getElementById(imgId); img.style.display = 'block'; const existingPlaceholder = container.querySelector('.missing-asset-placeholder'); if (existingPlaceholder) container.removeChild(existingPlaceholder); img.onerror = function() { this.style.display = 'none'; container.appendChild(createFloatingTextPlaceholder(filename)); }; img.src = basePath + filename; }
 
     // --- 4. ENGINE CLASSES ---
-
     class CharacterMenu {
-        constructor() {
-            this.name = "Player";
-            this.exp = 0;
-            this.inventory = {};
-            this.equipment = { weapon: null, body: null, leggings: null };
-            this.active = false; 
-            this.hp = 10;
-            this.skills = new Skills(4,2,1,1);
-            
-            // New Nav State
-            this.menuCursor = 0; 
-            this.interactables = []; // To map indices to items/slots
+        constructor() { this.name="Player"; this.exp=0; this.inventory={}; this.equipment={weapon:null, body:null, leggings:null}; this.active=false; this.hp=10; this.skills=new Skills(4,2,1,1); this.menuCursor=0; this.interactables=[]; }
+        createItem(n, a) { let d=ITEM_DEFINITIONS[n]||{}; return new Item(n, d.is_weapon, d.is_armor_body, d.is_armor_leggings, a, d.bonus_hp||0, d.bonus_skills); }
+        addItem(n, a=1) { if(typeof n==='object'&&n.name)n=n.name; if(!this.inventory[n])this.inventory[n]=this.createItem(n,0); this.inventory[n].amount+=a; }
+        getItemCount(n) { return this.inventory[n]?this.inventory[n].amount:0; }
+        equipItem(n) { if(!this.inventory[n]||this.inventory[n].amount<=0)return; let i=this.inventory[n], s=i.is_weapon?"weapon":i.is_armor_body?"body":i.is_armor_leggings?"leggings":null; if(s){ this.unequipItem(s); i.amount--; if(i.amount===0)delete this.inventory[n]; this.equipment[s]=this.createItem(n,1); Game.render(); }}
+        unequipItem(s) { if(this.equipment[s]){ this.addItem(this.equipment[s].name,1); this.equipment[s]=null; Game.render(); }}
+        getRawCombatSkills() {
+            let t=new Skills(this.skills.attack,this.skills.defense,this.skills.healing,this.skills.luck);
+            // Adding leveling bonus
+            let level = this.getLevel()
+            t=t.add(new Skills(level,level,level,level));
+            return t;
         }
-
-        createItem(name, amount) {
-            let def = ITEM_DEFINITIONS[name] || {};
-            return new Item(
-                name, 
-                def.is_weapon || false, 
-                def.is_armor_body || false, 
-                def.is_armor_leggings || false, 
-                amount, 
-                def.bonus_hp || 0, 
-                def.bonus_skills || new Skills(0,0,0,0)
-            );
-        }
-
-        addItem(name, amount = 1) {
-            if (typeof name === 'object' && name.name) name = name.name;
-            if (!this.inventory[name]) {
-                this.inventory[name] = this.createItem(name, 0);
-            }
-            this.inventory[name].amount += amount;
-        }
-        
-        getItemCount(name) {
-            return this.inventory[name] ? this.inventory[name].amount : 0;
-        }
-
-        equipItem(itemName) {
-            if (!this.inventory[itemName] || this.inventory[itemName].amount <= 0) return;
-            let item = this.inventory[itemName];
-            let slot = null;
-
-            if (item.is_weapon) slot = "weapon";
-            else if (item.is_armor_body) slot = "body";
-            else if (item.is_armor_leggings) slot = "leggings";
-
-            if (slot) {
-                this.unequipItem(slot);
-                item.amount--;
-                if (item.amount === 0) delete this.inventory[itemName];
-                this.equipment[slot] = this.createItem(itemName, 1);
-                Game.log(`Equipped: ${itemName}`);
-                Game.render();
-            }
-        }
-
-        unequipItem(slot) {
-            if (this.equipment[slot]) {
-                let item = this.equipment[slot];
-                this.addItem(item.name, 1);
-                this.equipment[slot] = null;
-                Game.log(`Unequipped: ${item.name}`);
-                Game.render();
-            }
-        }
-
         getCombatSkills() {
-            let total = new Skills(this.skills.attack, this.skills.defense, this.skills.healing, this.skills.luck);
-            for (let slot in this.equipment) {
-                if (this.equipment[slot]) {
-                    total = total.add(this.equipment[slot].bonus_skills);
-                }
-            }
-            return total;
+            //let t=new Skills(this.skills.attack,this.skills.defense,this.skills.healing,this.skills.luck);
+            let t=this.getRawCombatSkills()
+            for(let s in this.equipment)
+                if(this.equipment[s])
+                    t=t.add(this.equipment[s].bonus_skills);
+            return t;
         }
-
-        getLevel() { return Math.floor(Math.sqrt(0.1 * this.exp)); }
-        getMaxExp() { return 10 * Math.pow(this.getLevel() + 1, 2); }
-        getMaxHP() { 
-            let base = 10 + (this.getLevel() * 5);
-            let bonus = 0;
-            for(let slot in this.equipment) {
-                if(this.equipment[slot]) bonus += this.equipment[slot].bonus_hp;
-            }
-            return base + bonus;
-        }
-
-        // --- KEYBOARD NAVIGATION METHODS ---
-
-        moveCursor(offset) {
-            if (this.interactables.length === 0) return;
-            this.menuCursor += offset;
-            if (this.menuCursor < 0) this.menuCursor = this.interactables.length - 1;
-            if (this.menuCursor >= this.interactables.length) this.menuCursor = 0;
-            Game.render();
-        }
-
-        selectOption() {
-            if (this.interactables.length === 0) return;
-            const target = this.interactables[this.menuCursor];
-            
-            if (target.type === 'slot') {
-                this.unequipItem(target.id);
-            } else if (target.type === 'item') {
-                this.equipItem(target.id);
-            }
-        }
-
+        getLevel() { return Math.floor(Math.sqrt(0.1*this.exp)); } getMaxExp() { return 10*Math.pow(this.getLevel()+1,2); }
+        getMaxHP() { let b=10+(this.getLevel()*5), bo=0; for(let s in this.equipment)if(this.equipment[s])bo+=this.equipment[s].bonus_hp; return b+bo; }
+        moveCursor(o) { if(this.interactables.length===0)return; this.menuCursor+=o; if(this.menuCursor<0)this.menuCursor=this.interactables.length-1; if(this.menuCursor>=this.interactables.length)this.menuCursor=0; Game.render(); }
+        selectOption() { if(this.interactables.length===0)return; const t=this.interactables[this.menuCursor]; if(t.type==='slot')this.unequipItem(t.id); else if(t.type==='item')this.equipItem(t.id); else if(t.type==='close') Game.toggleCharacterMenu(); }
         getDisplayHTML() {
-            this.interactables = []; // Reset list
-            let counter = 0;
-
-            let invHTML = "";
-            let keys = Object.keys(this.inventory);
-
-            // 1. Render Equipment Slots
-            let equipHTML = "";
-            ['weapon', 'body', 'leggings'].forEach(slot => {
-                let item = this.equipment[slot];
-                
-                // Track this slot for navigation
-                this.interactables.push({ type: 'slot', id: slot });
-                let isSelected = (counter === this.menuCursor);
-                counter++;
-
-                let slotClass = "equip-slot";
-                if (isSelected) slotClass += " menu-focus-row";
-
-                let content = item ? `${item.name} <span class="inv-btn" onclick="Game.player.unequipItem('${slot}')">Unequip</span>` 
-                                   : `<span style="color:#666">Empty ${slot}</span>`;
-                
-                equipHTML += `<div class="${slotClass}"><span>${content}</span></div>`;
-            });
-
-            // 2. Render Inventory List
-            if (keys.length > 0) {
-                keys.forEach(key => {
-                    let item = this.inventory[key];
-                    let displayCount = Number.isInteger(item.amount) ? item.amount : item.amount.toFixed(1);
-                    
-                    let canEquip = (item.is_weapon || item.is_armor_body || item.is_armor_leggings);
-                    
-                    // Track for navigation
-                    this.interactables.push({ type: canEquip ? 'item' : 'none', id: key });
-                    let isSelected = (counter === this.menuCursor);
-                    counter++;
-
-                    let rowStyle = "display:flex; justify-content:space-between; margin-bottom:4px; padding:2px 4px; border-radius:4px; border:1px solid transparent;";
-                    let className = isSelected ? "menu-focus-row" : "";
-                    
-                    if (isSelected) rowStyle += " border-color: var(--accent); background: rgba(255,255,255,0.1);";
-
-                    let actionBtn = "";
-                    if (canEquip) {
-                        actionBtn = `<span class="inv-btn" onclick="Game.player.equipItem('${key}')">Equip</span>`;
-                    }
-
-                    invHTML += `<div class="${className}" style="${rowStyle}">
-                        <span>- ${item.name} x${displayCount}</span>
-                        ${actionBtn}
-                    </div>`;
-                });
-            } else {
-                invHTML = "<div style='color:#666; font-style:italic'>(Bag is empty)</div>";
-            }
-
-            let combatSkills = this.getCombatSkills();
-
-            // --- FORMAT STATS (Base + Bonus) ---
-            const formatStat = (base, total) => {
-                let bonus = total - base;
-                return bonus > 0 ? `${base}<span style="color:#4f4">+${bonus}</span>` : `${base}`;
-            };
-
-            let atkDisplay = formatStat(this.skills.attack, combatSkills.attack);
-            let defDisplay = formatStat(this.skills.defense, combatSkills.defense);
-            let healDisplay = formatStat(this.skills.healing, combatSkills.healing);
-            let lckDisplay = formatStat(this.skills.luck, combatSkills.luck);
-
-            return `
-            <div style="font-family:'Courier New'; line-height:1.4; font-size:13px;">
-                <div style="border-bottom:1px solid #555; margin-bottom:10px; padding-bottom:5px; text-align:center;">
-                    <strong>CHARACTER MENU</strong>
-                </div>
-                
-                <div style="margin-bottom:10px;">
-                    <div style="color:var(--accent); font-weight:bold;">ATTRIBUTES</div>
-                    <div>ATK: ${atkDisplay} | DEF: ${defDisplay}</div>
-                    <div>HEAL: ${healDisplay} | LCK: ${lckDisplay}</div>
-                </div>
-
-                <div style="margin-bottom:10px;">
-                    <div style="color:var(--accent); font-weight:bold; margin-bottom:5px;">EQUIPMENT (Enter to Unequip)</div>
-                    ${equipHTML}
-                </div>
-
-                <div>
-                    <div style="color:var(--accent); font-weight:bold; margin-bottom:5px;">INVENTORY (Enter to Equip)</div>
-                    <div id="inv-scroll-container" style="max-height:150px; overflow-y:auto; padding-right:5px;">
-                        ${invHTML}
-                    </div>
-                </div>
-                
-                <br>
-                <div style="text-align:center; color:#888; border-top:1px solid #555; padding-top:5px;">
-                    [Close: C/Bag]
-                </div>
-            </div>`;
+            this.interactables=[]; let c=0, invH="", keys=Object.keys(this.inventory), equipH="";
+            ['weapon','body','leggings'].forEach(s=>{ let i=this.equipment[s]; this.interactables.push({type:'slot',id:s}); let sel=(c===this.menuCursor); c++; let sc="equip-slot"+(sel?" menu-focus-row":""); equipH+=`<div class="${sc}"><span>${i?`${i.name} <span class="inv-btn" onclick="Game.player.unequipItem('${s}')">Unequip</span>`:`<span style="color:#666">Empty ${s}</span>`}</span></div>`; });
+            if(keys.length>0){ keys.forEach(k=>{ let i=this.inventory[k], dc=Number.isInteger(i.amount)?i.amount:i.amount.toFixed(1), ce=(i.is_weapon||i.is_armor_body||i.is_armor_leggings); this.interactables.push({type:ce?'item':'none',id:k}); let sel=(c===this.menuCursor); c++; let rs="display:flex; justify-content:space-between; margin-bottom:4px; padding:2px 4px; border-radius:4px; border:1px solid transparent;"+(sel?" border-color: var(--accent); background: rgba(255,255,255,0.1);":""); invH+=`<div class="${sel?"menu-focus-row":""}" style="${rs}"><span>- ${i.name} x${dc}</span>${ce?`<span class="inv-btn" onclick="Game.player.equipItem('${k}')">Equip</span>`:""}</div>`; }); } else { invH="<div style='color:#666; font-style:italic'>(Bag is empty)</div>"; }
+            let cs=this.getCombatSkills(), fs=(b,t)=>{let bo=t-b;return bo>0?`${b}<span style="color:#4f4">+${bo}</span>`:`${b}`;};
+            this.interactables.push({type:'close', id:'close'});
+            let closeSel = (c === this.menuCursor); let closeClass = "menu-item" + (closeSel ? " menu-focus-row" : "");
+            let closeBtn = `<div class="${closeClass}" style="justify-content:center; margin-top:15px; background:#444; color:#fff; font-weight:bold; text-align:center;" onclick="Game.toggleCharacterMenu()">CLOSE BAG</div>`;
+            let raw_skills = this.getRawCombatSkills();
+            return `<div style="font-family:'Courier New'; line-height:1.4; font-size:13px;"><div style="border-bottom:1px solid #555; margin-bottom:10px; padding-bottom:5px; text-align:center;"><strong>CHARACTER MENU</strong></div><div style="margin-bottom:10px;"><div style="color:var(--accent); font-weight:bold;">ATTRIBUTES</div>
+                <div>ATK: ${fs(raw_skills.attack,cs.attack)} | DEF: ${fs(raw_skills.defense,cs.defense)}</div>
+                <div>HEAL: ${fs(raw_skills.healing,cs.healing)} | LCK: ${fs(raw_skills.luck,cs.luck)}</div></div>
+                <div style="margin-bottom:10px;"><div style="color:var(--accent); font-weight:bold; margin-bottom:5px;">EQUIPMENT (Enter to Unequip)</div>${equipH}</div><div><div style="color:var(--accent); font-weight:bold; margin-bottom:5px;">INVENTORY (Enter to Equip)</div><div id="inv-scroll-container" style="max-height:150px; overflow-y:auto; padding-right:5px;">${invH}</div></div>${closeBtn}</div>`;
         }
     }
 
     // --- 5. MAIN GAME ENGINE ---
-
     const Game = {
         player: new CharacterMenu(),
-        
-        currentNode: null,
-        currentTitle: "",
-        currentImage: "",
-        pathStack: [],
-        cursor: 0,
-        
-        activeInterval: null,
-        currentActionName: "", 
-        inCombat: false, 
+        currentNode: null, currentTitle: "", currentImage: "", pathStack: [], cursor: 0, activeInterval: null, currentActionName: "", 
+        inCombat: false, inDialogue: false, dialogueQueue: [], dialogueIndex: 0, dialogueOnComplete: null,
+        dungeonStages: [], dungeonIndex: 0, currentDungeonEnemy: null, dungeonTurn: 0,
 
         init: function() {
             this.player.hp = this.player.getMaxHP();
-            const startKey = Object.keys(worldMap)[0]; 
-            this.enterScene(startKey, worldMap[startKey]);
             this.setupInput();
-            this.updatePlayerHUD(); 
             this.startPassiveRegen();
-
-            document.getElementById('menu-toggle-btn').onclick = () => {
-                this.toggleCharacterMenu();
-            };
+            this.updatePlayerHUD();
+            document.getElementById('menu-toggle-btn').onclick = () => { this.toggleCharacterMenu(); };
+            const rootKey = "scene:open_world:Open World:world_map.png";
+            const townKey = "scene:town:➡️ To Town:town_square.png";
+            const rootNode = worldMap[rootKey];
+            const townNode = rootNode[townKey];
+            const rootInfo = this.parseKey(rootKey);
+            this.pathStack.push({ node: rootNode, title: rootInfo.name, image: rootInfo.image, cursor: 0 });
+            const introDlg = rootNode["starting_dialogue"][0];
+            introDlg.played = true;
+            this.startDialogue(introDlg, () => { this.enterScene(townKey, townNode); });
         },
 
-        toggleCharacterMenu: function() {
-            this.player.active = !this.player.active;
-            // Reset cursor when opening for better UX
-            if(this.player.active) this.player.menuCursor = 0; 
-            this.render();
+        startDialogue: function(dialogueObj, callback) {
+            this.inDialogue = true; this.dialogueQueue = dialogueObj.data; this.dialogueIndex = 0; this.dialogueOnComplete = callback;
+            document.getElementById('dialogue-visual-layer').classList.add('active');
+            document.getElementById('dialogue-box').classList.add('active');
+            document.getElementById('menu-list').style.display = 'none';
+            safelySetBackgroundImage('dialogue-bg-container', 'dialogue-bg', "images/bg/", dialogueObj.background);
+            this.renderDialogueFrame();
+            document.getElementById('location-pill').classList.remove('visible')
+        },
+        advanceDialogue: function() {
+            if (!this.inDialogue) return;
+            const currentStep = this.dialogueQueue[this.dialogueIndex]; //if (currentStep && currentStep[0] === 'question') return; 
+            this.dialogueIndex++; if (this.dialogueIndex >= this.dialogueQueue.length) { this.endDialogue(); } else { this.renderDialogueFrame(); }
+        },
+        endDialogue: function(returnValue) {
+            this.inDialogue = false; document.getElementById('dialogue-visual-layer').classList.remove('active');
+            document.getElementById('dialogue-box').classList.remove('active'); document.getElementById('menu-list').style.display = 'flex';
+            document.getElementById('sprite-container').innerHTML = ''; 
+            if (this.dialogueOnComplete) this.dialogueOnComplete(returnValue); this.render(); 
+            document.getElementById('location-pill').classList.add('visible')
+        },
+        renderDialogueFrame: function() {
+            const step = this.dialogueQueue[this.dialogueIndex]; if (!step) return;
+            const type=step[0], speaker=step[1], text=step[2], spriteData=step[3], questionData=step[4];
+            document.getElementById('speaker-name').innerText = speaker; document.getElementById('dialogue-text').innerText = text;
+            const spriteId = spriteData ? spriteData[0] : null; let wrapper = document.getElementById('sprite-' + spriteId);
+            if (spriteId) {
+                const locationStr = spriteData[1]; const animName = spriteData[2];
+                let leftPos = "50%", bottomPos = "0%", coords = locationStr.replace(/[()]/g, '').split(','); if (coords.length === 2) { leftPos = coords[0]; bottomPos = coords[1]; }
+                if (!wrapper) {
+                    wrapper = document.createElement('div'); wrapper.id = 'sprite-' + spriteId; wrapper.className = 'sprite-wrapper';
+                    const img = document.createElement('img'); img.className = 'character-sprite';
+                    img.onerror = function() { const placeholder = createFloatingTextPlaceholder(spriteId, this.className); wrapper.innerHTML = ''; wrapper.appendChild(placeholder); };
+                    img.src = "images/sprites/" + spriteId;
+                    wrapper.appendChild(img); document.getElementById('sprite-container').appendChild(wrapper);
+                    wrapper.style.transition = 'none'; wrapper.style.left = leftPos; wrapper.style.bottom = bottomPos; wrapper.style.transform = `translateX(-${leftPos})`; void wrapper.offsetWidth; wrapper.style.transition = '';
+                } else { wrapper.style.left = leftPos; wrapper.style.bottom = bottomPos; wrapper.style.transform = `translateX(-${leftPos})`; }
+                const img = wrapper.querySelector('.character-sprite') || wrapper.querySelector('.missing-asset-placeholder');
+                img.className = wrapper.querySelector('.missing-asset-placeholder') ? 'missing-asset-placeholder character-sprite' : 'character-sprite';
+                void img.offsetWidth; if (animName === "fade in") img.classList.add('anim-fade-in'); else if (animName === "fade out") img.classList.add('anim-fade-out'); else if (animName === "shake") img.classList.add('anim-shake');
+            } else { document.getElementById('sprite-container').innerHTML = ''; }
+            const questionContainer = document.getElementById('dialogue-questions'); questionContainer.innerHTML = text+'<br>'; 
+            if (type === 'question' && questionData) {
+                questionContainer.classList.add('active'); 
+                for (let label in questionData) {
+                    let btn = document.createElement('div');
+                    btn.className = 'choice-btn';
+                    btn.innerText = label;
+                    btn.onclick = (e) => {
+                        e.stopPropagation();
+                        questionContainer.classList.remove('active');
+                        this.advanceDialogue();
+                    };
+                    questionContainer.appendChild(btn);
+                }
+            } else {
+                questionContainer.classList.remove('active');
+            }
         },
 
-        startPassiveRegen: function() {
-            setInterval(() => {
-                if (this.inCombat) return;
-                const maxHp = this.player.getMaxHP();
-                if (this.player.hp <= 0 || this.player.hp >= maxHp) return;
-                this.player.hp += this.player.skills.healing;
-                if (this.player.hp > maxHp) this.player.hp = maxHp;
-                this.updatePlayerHUD();
-            }, 2000); 
+        toggleCharacterMenu: function() { if(this.inDialogue) return; this.player.active = !this.player.active; if(this.player.active) this.player.menuCursor = 0; this.render(); },
+        startPassiveRegen: function() { setInterval(() => { if (this.inCombat) return; const maxHp = this.player.getMaxHP(); if (this.player.hp <= 0 || this.player.hp >= maxHp) return; this.player.hp += this.player.skills.healing; if (this.player.hp > maxHp) this.player.hp = maxHp; this.updatePlayerHUD(); }, 2000); },
+        updatePlayerHUD: function() { const lvl = this.player.getLevel(); document.getElementById('player-name').textContent = `${this.player.name} Lv.${lvl}`; const maxHp = this.player.getMaxHP(); document.getElementById('hud-hp-bar').style.width = `${Math.max(0, Math.min(100, (this.player.hp / maxHp) * 100))}%`; const maxExp = this.player.getMaxExp(); document.getElementById('hud-exp-bar').style.width = `${Math.max(0, Math.min(100, (this.player.exp / maxExp) * 100))}%`; },
+        
+        showEnemyHUD: function(name, currentHp, maxHp, isBoss = false) { 
+            const hud = document.getElementById('enemy-hud'); hud.classList.add('visible'); 
+            const nameEl = document.getElementById('enemy-name'); nameEl.textContent = name; 
+            if (isBoss) nameEl.classList.add('boss-name'); else nameEl.classList.remove('boss-name');
+            this.updateEnemyHUD(currentHp, maxHp); 
         },
-
-        updatePlayerHUD: function() {
-            const lvl = this.player.getLevel();
-            document.getElementById('player-name').textContent = `${this.player.name} Lv.${lvl}`;
-            const maxHp = this.player.getMaxHP();
-            const hpPct = Math.max(0, Math.min(100, (this.player.hp / maxHp) * 100));
-            document.getElementById('hud-hp-bar').style.width = `${hpPct}%`;
-            const maxExp = this.player.getMaxExp();
-            const expPct = Math.max(0, Math.min(100, (this.player.exp / maxExp) * 100));
-            document.getElementById('hud-exp-bar').style.width = `${expPct}%`;
-        },
-
-        showEnemyHUD: function(name, currentHp, maxHp) {
-            const hud = document.getElementById('enemy-hud');
-            hud.classList.add('visible');
-            document.getElementById('enemy-name').textContent = name;
-            this.updateEnemyHUD(currentHp, maxHp);
-        },
-
-        updateEnemyHUD: function(currentHp, maxHp) {
-            const hpPct = Math.max(0, Math.min(100, (currentHp / maxHp) * 100));
-            document.getElementById('enemy-hp-bar').style.width = `${hpPct}%`;
-            document.getElementById('enemy-stats').textContent = `${Math.ceil(currentHp)}/${maxHp} HP`;
-        },
-
-        hideEnemyHUD: function() {
-            const hud = document.getElementById('enemy-hud');
-            hud.classList.remove('visible');
+        updateEnemyHUD: function(currentHp, maxHp) { document.getElementById('enemy-hp-bar').style.width = `${Math.max(0, Math.min(100, (currentHp / maxHp) * 100))}%`; document.getElementById('enemy-stats').textContent = `${Math.ceil(currentHp)}/${maxHp} HP`; },
+        hideEnemyHUD: function() { document.getElementById('enemy-hud').classList.remove('visible'); },
+        
+        // --- FIXED UI FUNCTION ---
+        updateDungeonUI: function() {
+            const bar = document.getElementById('hud-dungeon-bar');
+            const row = document.getElementById('dungeon-progress-row');
+            
+            // FIX: Check if the action string STARTS with "dungeon" instead of exact equality
+            if (this.currentActionName && this.currentActionName.startsWith('dungeon') && this.dungeonStages.length > 0) {
+                row.classList.add('visible');
+                const pct = (this.dungeonIndex / this.dungeonStages.length) * 100;
+                bar.style.width = `${pct}%`;
+            } else {
+                row.classList.remove('visible');
+                bar.style.width = '0%';
+            }
         },
 
         render: function() {
+            if(this.inDialogue) return;
             document.getElementById('location-pill').textContent = this.currentTitle;
-            document.getElementById('scene-image').src = "images/bg/"+this.currentImage;
-            
+            safelySetBackgroundImage('scene-bg-container', 'scene-image', "images/bg/", this.currentImage);
+
             this.updatePlayerHUD();
-
-            const menuContainer = document.getElementById('menu-list');
-            menuContainer.innerHTML = '';
-
-            // --- MENU RENDER LOGIC ---
-            if (this.player.active) {
-                menuContainer.innerHTML = this.player.getDisplayHTML();
-                
-                // AUTO SCROLL LOGIC
-                const activeRow = document.querySelector('.menu-focus-row');
-                if (activeRow) {
-                    activeRow.scrollIntoView({ block: 'nearest' });
-                }
-                return;
-            }
-
-            const options = Object.keys(this.currentNode);
-            
-            if(options.length === 0) {
-                menuContainer.innerHTML = '<div style="padding:20px; text-align:center; color:#666;">Nothing here...</div>';
-                return;
-            }
-
+            this.updateDungeonUI(); 
+            const menuContainer = document.getElementById('menu-list'); menuContainer.innerHTML = '';
+            if (this.player.active) { menuContainer.innerHTML = this.player.getDisplayHTML(); const activeRow = document.querySelector('.menu-focus-row'); if (activeRow) activeRow.scrollIntoView({ block: 'nearest' }); return; }
+            const options = Object.keys(this.currentNode).filter(key => key !== "starting_dialogue");
+            if(options.length === 0) { menuContainer.innerHTML = '<div style="padding:20px; text-align:center; color:#666;">Nothing here...</div>'; return; }
+            if (this.cursor >= options.length) this.cursor = 0;
             options.forEach((key, index) => {
                 const info = this.parseKey(key);
-                const el = document.createElement('div');
-                
-                el.className = 'menu-item';
+                const el = document.createElement('div'); el.className = 'menu-item';
                 if (index === this.cursor) el.classList.add('active');
-
-                el.onmouseenter = () => {
-                    this.cursor = index;
-                    Array.from(menuContainer.children).forEach(child => child.classList.remove('active'));
-                    el.classList.add('active');
-                };
-
+                el.onmouseenter = () => { this.cursor = index; Array.from(menuContainer.children).forEach(child => child.classList.remove('active')); el.classList.add('active'); };
                 let content = `<span>${info.name}</span>`;
-                
                 if (info.role === 'craft') {
-                    const recipe = this.currentNode[key][2];
-                    let canAfford = true;
-                    for (let rKey in recipe) {
-                        if (rKey.startsWith('input:')) {
-                            let item = rKey.split(':')[1];
-                            let cost = recipe[rKey];
-                            if (this.player.getItemCount(item) < cost) {
-                                canAfford = false;
-                            }
-                        }
-                    }
-                    if (!canAfford) {
-                        content += `<span class="insufficient">(insufficient ingredients)</span>`;
-                    }
+                    const recipe = this.currentNode[key][2]; let canAfford = true;
+                    for (let rKey in recipe) { if (rKey.startsWith('input:')) { let item = rKey.split(':')[1]; let cost = recipe[rKey]; if (this.player.getItemCount(item) < cost) canAfford = false; } }
+                    if (!canAfford) content += `<span class="insufficient">(insufficient ingredients)</span>`;
                 }
-
-                if (this.activeInterval && this.currentActionName === key) {
-                    content += `<span class="menu-item-tag">STOP</span>`;
-                }
+                if (this.activeInterval && this.currentActionName === key) content += `<span class="menu-item-tag">STOP</span>`;
                 el.innerHTML = content;
-                
-                el.onclick = () => {
-                    this.cursor = index;
-                    this.executeOption();
-                    this.render();
-                };
-
+                el.onclick = () => { this.cursor = index; this.executeOption(key); this.render(); };
                 menuContainer.appendChild(el);
             });
-            
-            const activeEl = menuContainer.children[this.cursor];
-            if(activeEl) {
-                activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            }
+            const activeEl = menuContainer.children[this.cursor]; if(activeEl) activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         },
-
-        log: function(msg) {
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
-            toast.className = 'toast';
-            toast.textContent = msg;
-            container.appendChild(toast);
-            setTimeout(() => {
-                if (toast.parentNode) toast.parentNode.removeChild(toast);
-            }, 2500);
-        },
-
-        parseKey: function(keyString) {
-            const parts = keyString.split(':');
-            return {
-                role: parts[0],
-                id: parts[1],
-                name: parts[2] || parts[1],
-                image: parts[3] || "placeholder.png"
-            };
-        },
-
+        log: function(msg) { const container = document.getElementById('toast-container'); const toast = document.createElement('div'); toast.className = 'toast'; toast.textContent = msg; container.appendChild(toast); setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 2500); },
+        parseKey: function(keyString) { const parts = keyString.split(':'); return { role: parts[0], id: parts[1], name: parts[2] || parts[1], image: parts[3] || "placeholder.png" }; },
         enterScene: function(keyString, nodeObj) {
             const info = this.parseKey(keyString);
-            if (this.currentNode) {
-                this.pathStack.push({
-                    node: this.currentNode,
-                    title: this.currentTitle,
-                    image: this.currentImage,
-                    cursor: this.cursor
-                });
+            if (this.currentNode) this.pathStack.push({ node: this.currentNode, title: this.currentTitle, image: this.currentImage, cursor: this.cursor });
+            let place_name = info.id;
+            this.currentNode = nodeObj; this.currentTitle = place_name; this.currentImage = info.image; this.cursor = 0; this.stopAction();
+            if (nodeObj["starting_dialogue"]) {
+                const dialogueObj = nodeObj["starting_dialogue"][0];
+                if (dialogueObj && (!dialogueObj.played || dialogueObj.repeating)) { this.startDialogue(dialogueObj, () => { dialogueObj.played = true; this.render(); }); return; }
             }
-            this.currentNode = nodeObj;
-            this.currentTitle = info.name;
-            this.currentImage = info.image;
-            this.cursor = 0;
-            this.stopAction();
             this.render();
         },
-
-        returnScene: function() {
-            if (this.pathStack.length === 0) return;
-            const previous = this.pathStack.pop();
-            this.currentNode = previous.node;
-            this.currentTitle = previous.title;
-            this.currentImage = previous.image;
-            this.cursor = previous.cursor;
-            this.stopAction();
-            this.render();
-        },
-
-        stopAction: function() {
-            if (this.activeInterval) {
-                clearInterval(this.activeInterval);
-                this.activeInterval = null;
-                this.currentActionName = "";
-                this.inCombat = false; 
-                this.hideEnemyHUD(); 
-
-                // --- CRAFTING CLEANUP ---
-                // Round down all ingredients when action stops.
-                for (let key in this.player.inventory) {
-                    this.player.inventory[key].amount = Math.floor(this.player.inventory[key].amount);
-                    if (this.player.inventory[key].amount <= 0) delete this.player.inventory[key];
-                }
-
-                this.render();
-            }
-        },
-
-        executeOption: function() {
-            const keys = Object.keys(this.currentNode);
-            if (keys.length === 0) return;
-
-            const selectedKey = keys[this.cursor];
-            const selectedValue = this.currentNode[selectedKey];
-            const info = this.parseKey(selectedKey);
-
-            if (this.activeInterval && this.currentActionName === selectedKey) {
-                this.stopAction();
-                return;
-            }
-
-            switch (info.role) {
-                case "scene":
-                    this.enterScene(selectedKey, selectedValue);
-                    break;
-                case "return":
-                    this.returnScene();
-                    break;
-                case "harvest":
-                    this.stopAction();
-                    this.currentActionName = selectedKey;
-                    this.startHarvestLoop(selectedValue[0], selectedValue[1], selectedValue[2]);
-                    this.render();
-                    break;
-                case "fight":
-                    this.stopAction();
-                    this.currentActionName = selectedKey;
-                    this.startFightLoop(selectedValue[0], selectedValue[1], selectedValue[2]);
-                    this.render();
-                    break;
-                case "craft":
-                    this.stopAction();
-                    this.currentActionName = selectedKey;
-                    this.startCraftLoop(selectedValue[0], selectedValue[1], selectedValue[2]);
-                    this.render();
-                    break;
-                default:
-                    this.log(`Unknown role: ${info.role}`);
-            }
-        },
-
-        startCraftLoop: function(interval, notif, recipe) {
-            this.log(notif);
-            this.activeInterval = setInterval(() => {
-                let canAfford = true;
-                for (let key in recipe) {
-                    if (key.startsWith("input:")) {
-                        let item = key.split(":")[1];
-                        let cost = recipe[key];
-                        if (this.player.getItemCount(item) < cost) {
-                            canAfford = false;
-                        }
-                    }
-                }
-                if (!canAfford) {
-                    this.log("Stopped: Insufficient ingredients.");
-                    this.stopAction(); // This will trigger the rounding cleanup
-                    return;
-                }
-                for (let key in recipe) {
-                    if (key.startsWith("input:")) {
-                        let item = key.split(":")[1];
-                        let cost = recipe[key];
-                        this.player.inventory[item].amount -= cost;
-                    }
-                }
-                let outputStr = "";
-                for (let key in recipe) {
-                    if (key.startsWith("output:")) {
-                        let item = key.split(":")[1];
-                        let amount = recipe[key];
-                        this.player.addItem(item, amount);
-                        outputStr += `${amount} ${item} `;
-                    }
-                }
-                this.log(`Crafted: ${outputStr}`);
+        returnScene: function() { if (this.pathStack.length === 0) return; const previous = this.pathStack.pop(); this.currentNode = previous.node; this.currentTitle = previous.title; this.currentImage = previous.image; this.cursor = previous.cursor; this.stopAction(); this.render(); },
+        stopAction: function() { 
+            if (this.activeInterval) { 
+                clearInterval(this.activeInterval); this.activeInterval = null; this.currentActionName = ""; this.inCombat = false; this.hideEnemyHUD(); 
+                this.dungeonIndex = 0; 
+                for (let key in this.player.inventory) { this.player.inventory[key].amount = Math.floor(this.player.inventory[key].amount); if (this.player.inventory[key].amount <= 0) delete this.player.inventory[key]; } 
                 this.render(); 
-            }, interval);
+            } 
         },
-
-        startHarvestLoop: function(interval, notif, itemDict) {
-            this.log(notif);
-            this.activeInterval = setInterval(() => {
-                const item = dictDraw(itemDict);
-                if (item) {
-                    this.player.addItem(item);
-                    this.log(`+1 ${item}`);
-                    this.updatePlayerHUD(); 
-                }
-            }, interval);
+        executeOption: function(specificKey = null) {
+            const options = Object.keys(this.currentNode).filter(k => k !== "starting_dialogue"); if (options.length === 0) return;
+            const selectedKey = specificKey || options[this.cursor]; const selectedValue = this.currentNode[selectedKey]; const info = this.parseKey(selectedKey);
+            if (this.activeInterval && this.currentActionName === selectedKey) { this.stopAction(); return; }
+            switch (info.role) {
+                case "scene": this.enterScene(selectedKey, selectedValue); break;
+                case "return": this.returnScene(); break;
+                case "harvest": this.stopAction(); this.currentActionName = selectedKey; this.startHarvestLoop(selectedValue[0], selectedValue[1], selectedValue[2]); this.render(); break;
+                case "fight": this.stopAction(); this.currentActionName = selectedKey; this.startFightLoop(selectedValue[0], selectedValue[1], selectedValue[2]); this.render(); break;
+                case "dungeon": this.stopAction(); this.currentActionName = selectedKey; this.startDungeonLoop(selectedValue); this.render(); break;
+                case "craft": this.stopAction(); this.currentActionName = selectedKey; this.startCraftLoop(selectedValue[0], selectedValue[1], selectedValue[2]); this.render(); break;
+                case "dialogue": this.startDialogue(selectedValue[0], (retVal) => { if(retVal) { GlobalState[info.id] = retVal; this.log(`Result: ${retVal}`); } this.render(); }); break;
+                default: this.log(`Unknown role: ${info.role}`);
+            }
         },
-
+        startCraftLoop: function(interval, notif, recipe) { this.log(notif); this.activeInterval = setInterval(() => { let canAfford = true; for (let key in recipe) { if (key.startsWith("input:")) { let item = key.split(":")[1]; let cost = recipe[key]; if (this.player.getItemCount(item) < cost) canAfford = false; } } if (!canAfford) { this.log("Stopped: Insufficient ingredients."); this.stopAction(); return; } for (let key in recipe) { if (key.startsWith("input:")) { let item = key.split(":")[1]; let cost = recipe[key]; this.player.inventory[item].amount -= cost; } } let outputStr = ""; for (let key in recipe) { if (key.startsWith("output:")) { let item = key.split(":")[1]; let amount = recipe[key]; this.player.addItem(item, amount); outputStr += `${amount} ${item} `; } } this.log(`Crafted: ${outputStr}`); this.render(); }, interval); },
+        startHarvestLoop: function(interval, notif, itemDict) { this.log(notif); this.activeInterval = setInterval(() => { const item = dictDraw(itemDict); if (item) { this.player.addItem(item); this.log(`+1 ${item}`); this.updatePlayerHUD(); } }, interval); },
         startFightLoop: function(interval, notif, enemyDict) {
-            this.inCombat = true; 
-            let enemyTemplate = dictDraw(enemyDict); 
-            let enemy = new Enemy(enemyTemplate.name, enemyTemplate.hp, enemyTemplate.loots, enemyTemplate.skills);
-            let turn = 0; 
-            let enemy_hp = enemy.hp;
-            
-            let currentSkills = this.player.getCombatSkills();
-
-            this.showEnemyHUD(enemy.name, enemy_hp, enemy.maxHp);
-            this.log(`Encounter: ${enemy.name}!`);
-
+            this.inCombat = true; let enemyTemplate = dictDraw(enemyDict); let enemy = new Enemy(enemyTemplate.name, enemyTemplate.hp, enemyTemplate.loots, enemyTemplate.skills); let turn = 0; let enemy_hp = enemy.hp; let currentSkills = this.player.getCombatSkills();
+            this.showEnemyHUD(enemy.name, enemy_hp, enemy.maxHp); this.log(`Encounter: ${enemy.name}!`);
             this.activeInterval = setInterval(() => {
                 this.updateEnemyHUD(enemy_hp, enemy.maxHp);
-                if (enemy_hp <= 0) {
-                    let loot = dictDraw(enemy.loots);
-                    this.player.addItem(loot);
-                    this.log(`Victory! Found: ${loot}`);
-                    this.stopAction();
-                    return;
-                }
-                if (this.player.hp <= 0) {
-                    this.log(`Defeated! Retreated.`);
-                    this.stopAction();
-                    this.player.hp = 1; 
-                    this.updatePlayerHUD();
-                    return;
-                }
+                if (enemy_hp <= 0) { let loot = dictDraw(enemy.loots); this.player.addItem(loot); this.log(`Victory! Found: ${loot}`); this.stopAction(); return; }
+                if (this.player.hp <= 0) { this.log(`Defeated! Retreated.`); this.stopAction(); this.player.hp = 1; this.updatePlayerHUD(); return; }
                 if (turn === 1) {
                     const dmg = Math.max(0, enemy.skills.attack - currentSkills.defense);
-                    if (Math.random() < 1-Math.exp(-enemy.skills.luck)) {
-                        this.player.hp -= dmg;
-                        this.log(`Enemy hits for ${dmg} dmg!`);
-                    } else {
-                        this.log(`Enemy missed!`);
-                    }
-                    turn = 0;
-                } else {
-                    const dmg = Math.max(0, currentSkills.attack - enemy.skills.defense);
-                    if (Math.random() < 1-Math.exp(-currentSkills.luck)) {
-                        enemy_hp -= dmg;
-                        this.player.exp += 1;
-                        this.log(`Hit ${enemy.name} for ${dmg} dmg!`);
-                    } else {
-                        this.log(`You missed!`);
-                    }
-                    turn = 1;
+                    if (Math.random() < 1-Math.exp(-enemy.skills.luck)) { this.player.hp -= dmg; this.log(`${enemy.name} hits for ${dmg} dmg!`); } else { this.log(`${enemy.name} missed!`); } turn = 0;
                 }
-                this.updatePlayerHUD(); 
+                else { const dmg = Math.max(0, currentSkills.attack - enemy.skills.defense); if (Math.random() < 1-Math.exp(-currentSkills.luck)) { enemy_hp -= dmg; this.player.exp += 1; this.log(`Hit ${enemy.name} for ${dmg} dmg!`); } else { this.log(`You missed!`); } turn = 1; } this.updatePlayerHUD();
             }, interval);
         },
-
+        startDungeonLoop: function(stages) {
+            this.dungeonStages = stages; this.dungeonIndex = 0; this.inCombat = true;
+            this.loadDungeonEnemy(); this.updateDungeonUI();
+            this.activeInterval = setInterval(() => { this.processDungeonTurn(); }, this.dungeonStages[this.dungeonIndex][0]);
+        },
+        loadDungeonEnemy: function() {
+            if (this.dungeonIndex >= this.dungeonStages.length) { this.log("Dungeon Cleared!"); this.stopAction(); return; }
+            const stage = this.dungeonStages[this.dungeonIndex]; const enemyDict = stage[2]; const enemyTemplate = dictDraw(enemyDict);
+            this.currentDungeonEnemy = new Enemy(enemyTemplate.name, enemyTemplate.hp, enemyTemplate.loots, enemyTemplate.skills);
+            this.dungeonTurn = 0; const isBoss = (this.dungeonIndex === this.dungeonStages.length - 1);
+            this.showEnemyHUD(this.currentDungeonEnemy.name, this.currentDungeonEnemy.hp, this.currentDungeonEnemy.maxHp, isBoss);
+            this.log(isBoss ? `BOSS BATTLE: ${this.currentDungeonEnemy.name}!` : `Stage ${this.dungeonIndex+1}: ${this.currentDungeonEnemy.name}`);
+            this.updateDungeonUI();
+        },
+        processDungeonTurn: function() {
+            if (!this.currentDungeonEnemy) return;
+            this.updateEnemyHUD(this.currentDungeonEnemy.hp, this.currentDungeonEnemy.maxHp); let currentSkills = this.player.getCombatSkills();
+            if (this.currentDungeonEnemy.hp <= 0) {
+                let loot = dictDraw(this.currentDungeonEnemy.loots); this.player.addItem(loot); this.log(`Defeated! Found: ${loot}`);
+                this.dungeonIndex++;
+                if (this.dungeonIndex >= this.dungeonStages.length) { this.updateDungeonUI(); this.log("DUNGEON CONQUERED!"); this.stopAction(); } else { this.loadDungeonEnemy(); }
+                return;
+            }
+            if (this.player.hp <= 0) { this.log(`Dungeon Failed! Escaped.`); this.stopAction(); this.player.hp = 1; this.updatePlayerHUD(); return; }
+            if (this.dungeonTurn === 1) { 
+                const dmg = Math.max(0, this.currentDungeonEnemy.skills.attack - currentSkills.defense);
+                if (Math.random() < 1 - Math.exp(-this.currentDungeonEnemy.skills.luck)) {
+                    this.player.hp -= dmg;
+                    this.log(`${this.currentDungeonEnemy.name} hits for ${dmg} dmg!`);
+                }
+                else { this.log(`${this.currentDungeonEnemy.name} missed!`); }
+                this.dungeonTurn = 0;
+            } else { 
+                const dmg = Math.max(0, currentSkills.attack - this.currentDungeonEnemy.skills.defense);
+                if (Math.random() < 1 - Math.exp(-currentSkills.luck)) {
+                    this.currentDungeonEnemy.hp -= dmg;
+                    this.player.exp += 1;
+                    this.log(`Hit ${this.currentDungeonEnemy.name} for ${dmg} dmg!`); 
+                }
+                else { this.log(`You missed!`); }
+                this.dungeonTurn = 1;
+            }
+            this.updatePlayerHUD();
+        },
         setupInput: function() {
             document.addEventListener('keydown', (e) => {
-                // --- ARROW KEYS ---
-                if (e.key === "ArrowUp") {
-                    if (this.player.active) {
-                        this.player.moveCursor(-1);
-                    } else {
-                        const max = Object.keys(this.currentNode).length;
-                        if(max > 0) {
-                            this.cursor = (this.cursor - 1 + max) % max;
-                            this.render();
-                        }
-                    }
-                } else if (e.key === "ArrowDown") {
-                    if (this.player.active) {
-                        this.player.moveCursor(1);
-                    } else {
-                        const max = Object.keys(this.currentNode).length;
-                        if(max > 0) {
-                            this.cursor = (this.cursor + 1) % max;
-                            this.render();
-                        }
-                    }
-                } 
-                // --- ENTER KEY ---
-                else if (e.key === "Enter") {
-                    if (this.player.active) {
-                        this.player.selectOption();
-                    } else {
-                        this.executeOption();
-                    }
-                } 
-                // --- MENU TOGGLES ---
-                else if (e.key.toLowerCase() === "c") {
-                    this.toggleCharacterMenu();
-                } 
-                else if (e.key === "Escape") {
-                    if (this.player.active) {
-                        this.toggleCharacterMenu();
-                    } else {
-                        this.stopAction();
-                    }
-                }
+                if (e.key === "ArrowUp") { if (this.player.active) this.player.moveCursor(-1); else if (!this.inDialogue && Object.keys(this.currentNode).filter(k => k !== "starting_dialogue").length > 0) { this.cursor = (this.cursor - 1 + Object.keys(this.currentNode).filter(k => k !== "starting_dialogue").length) % Object.keys(this.currentNode).filter(k => k !== "starting_dialogue").length; this.render(); } }
+                else if (e.key === "ArrowDown") { if (this.player.active) this.player.moveCursor(1); else if (!this.inDialogue && Object.keys(this.currentNode).filter(k => k !== "starting_dialogue").length > 0) { this.cursor = (this.cursor + 1) % Object.keys(this.currentNode).filter(k => k !== "starting_dialogue").length; this.render(); } }
+                else if (e.key === "Enter") { if(this.inDialogue) this.advanceDialogue(); else if (this.player.active) this.player.selectOption(); else this.executeOption(); }
+                else if (e.key.toLowerCase() === "c") { this.toggleCharacterMenu(); }
+                else if (e.key === "Escape") { if (this.player.active) this.toggleCharacterMenu(); else this.stopAction(); }
             });
         }
     };
-
     Game.init();
-
 </script>
-
 </body>
 </html>
