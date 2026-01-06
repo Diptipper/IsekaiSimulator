@@ -290,7 +290,7 @@ const SceneFunctions = {
             Game.log("It's empty...");
             if (next) next();
         } else {
-            Game.log("You need a key...");
+            Game.log("Nothing to see here...");
             if (next) next();
         }
     },
