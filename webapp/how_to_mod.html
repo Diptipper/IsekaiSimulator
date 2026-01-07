@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RPG Engine Documentation</title>
+    <style>
+        :root {
+            --sidebar-width: 280px;
+            --primary-color: #2c3e50;
+            --accent-color: #3498db;
+            --text-color: #333;
+            --bg-color: #f4f7f6;
+            --code-bg: #282c34;
+            --code-text: #abb2bf;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            color: var(--text-color);
+            background-color: var(--bg-color);
+            display: flex;
+        }
+
+        /* SIDEBAR */
+        nav {
+            width: var(--sidebar-width);
+            background: white;
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            padding: 20px;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.05);
+            overflow-y: auto;
+        }
+
+        nav h1 { font-size: 1.2rem; color: var(--primary-color); margin-bottom: 20px; border-bottom: 2px solid var(--accent-color); padding-bottom: 10px; }
+        nav ul { list-style: none; padding: 0; }
+        nav li { margin-bottom: 10px; }
+        nav a { text-decoration: none; color: #555; font-size: 0.95rem; display: block; padding: 5px 10px; border-radius: 4px; transition: background 0.2s; }
+        nav a:hover { background: #eef2f5; color: var(--accent-color); }
+        nav .sub-link { margin-left: 15px; font-size: 0.9rem; border-left: 2px solid #ddd; }
+
+        /* MAIN CONTENT */
+        main {
+            margin-left: var(--sidebar-width);
+            padding: 40px 60px;
+            max-width: 900px;
+            width: 100%;
+        }
+
+        h1, h2, h3 { color: var(--primary-color); }
+        h1 { font-size: 2.5rem; margin-bottom: 10px; }
+        h2 { font-size: 1.8rem; margin-top: 40px; border-bottom: 1px solid #ddd; padding-bottom: 10px; }
+        h3 { font-size: 1.3rem; margin-top: 25px; color: var(--accent-color); }
+        p { line-height: 1.6; margin-bottom: 15px; }
+
+        /* CODE BLOCKS */
+        pre {
+            background: var(--code-bg);
+            color: var(--code-text);
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9rem;
+            border-left: 4px solid var(--accent-color);
+        }
+        code {
+            background: #e0e0e0;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-family: monospace;
+            color: #d63384;
+        }
+        pre code { background: transparent; color: inherit; padding: 0; }
+        
+        /* SYNTAX HIGHLIGHTING (Simulated) */
+        .kwd { color: #c678dd; } /* keyword */
+        .str { color: #98c379; } /* string */
+        .num { color: #d19a66; } /* number */
+        .com { color: #5c6370; font-style: italic; } /* comment */
+        .typ { color: #e5c07b; } /* type/key */
+
+        /* CALLOUTS */
+        .note {
+            background-color: #e8f4fd;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 0 4px 4px 0;
+        }
+        .note strong { color: #2980b9; }
+
+        /* PRINT MEDIA QUERY */
+        @media print {
+            nav { display: none; }
+            main { margin-left: 0; padding: 20px; max-width: 100%; }
+            body { background: white; }
+            pre { border: 1px solid #ddd; background: #f8f8f8; color: black; }
+            code { color: black; border: 1px solid #ccc; }
+            .kwd, .str, .num, .typ { color: black; } /* Simplifies print */
+        }
+    </style>
+</head>
+<body>
+
+<nav>
+    <h1>Engine Wiki</h1>
+    <ul>
+        <li><a href="#intro">Introduction</a></li>
+        <li><a href="#chapter1">Chapter 1: World Building</a></li>
+        <li><a href="#map-syntax" class="sub-link">Map Key Syntax</a></li>
+        <li><a href="#action-nodes" class="sub-link">Action Nodes</a></li>
+        
+        <li><a href="#chapter2">Chapter 2: Database</a></li>
+        <li><a href="#items" class="sub-link">Item Definitions</a></li>
+        <li><a href="#enemies" class="sub-link">Enemy Configuration</a></li>
+        
+        <li><a href="#chapter3">Chapter 3: Creating Quests</a></li>
+        <li><a href="#registry" class="sub-link">Interaction Registry</a></li>
+        <li><a href="#fetch-quest" class="sub-link">Fetch Quest</a></li>
+        
+        <li><a href="#chapter4">Chapter 4: Advanced Logic</a></li>
+        <li><a href="#teleports" class="sub-link">Teleportation</a></li>
+    </ul>
+</nav>
+
+<main>
+    <div id="intro">
+        <h1>RPG Data Engine Manual</h1>
+        <p>Welcome to the developer documentation for your JSON-based RPG engine. This engine separates <strong>Data</strong> (Content) from <strong>Logic</strong> (Engine), allowing you to create complex worlds by editing a single <code>game_data.js</code> file.</p>
+        <div class="note">
+            <strong>Core Concept:</strong> All gameplay logic is driven by the <code>INTERACTION_REGISTRY</code>. The map simply points to IDs in this registry using the <code>fn_interaction</code> hook.
+        </div>
+    </div>
+
+    <div id="chapter1">
+        <h2>Chapter 1: World Building</h2>
+        <p>The world is defined in the <code>worldMap</code> constant. It is a nested tree structure where every "Key" is a button the player can click, and every "Value" is what happens next.</p>
+
+        <h3 id="map-syntax">1. The Map Key Syntax</h3>
+        <p>Every key in the map object follows a strict format string:</p>
+        <pre><code><span class="str">"ROLE:ID:Name Displayed:image.png; HOOK:ARGUMENT"</span></code></pre>
+        <ul>
+            <li><strong>ROLE:</strong> What this button does (<code>scene</code>, <code>fight</code>, <code>harvest</code>, <code>craft</code>, <code>dungeon</code>, <code>return</code>).</li>
+            <li><strong>ID:</strong> A unique internal identifier (used for <code>goto</code> commands).</li>
+            <li><strong>Name Displayed:</strong> The text shown on the button (supports emojis).</li>
+            <li><strong>Image:</strong> The background image filename.</li>
+            <li><strong>HOOK (Optional):</strong> Usually <code>fn_interaction</code>.</li>
+            <li><strong>ARGUMENT (Optional):</strong> The ID of the logic block in the registry.</li>
+        </ul>
+
+        <h3 id="action-nodes">2. Common Node Types</h3>
+        <p>These are the "leafs" of your world tree. They perform gameplay loops.</p>
+
+        <h4>A. Harvest Node (Gathering)</h4>
+        <p>Runs a loop giving random items based on weights.</p>
+        <pre><code class="str">"harvest:mine_copper:⛏️ Mine Copper:mine_bg.png"</code>: [
+    <span class="num">1000</span>, <span class="com">// Interval (ms)</span>
+    <span class="str">"Mining..."</span>, <span class="com">// Notification text</span>
+    { <span class="str">"Stone"</span>: <span class="num">5</span>, <span class="str">"Copper Ore"</span>: <span class="num">1</span> } <span class="com">// Loot Table (Name: Weight)</span>
+]</pre>
+
+        <h4>B. Craft Node (Shop)</h4>
+        <p>Runs a loop consuming input items to create output items.</p>
+        <pre><code class="str">"craft:smelt:🔥 Smelt Ingot:anvil.png"</code>: [
+    <span class="num">1000</span>,
+    <span class="str">"Smelting..."</span>,
+    { 
+        <span class="str">"input:Copper Ore"</span>: <span class="num">1</span>, <span class="com">// Cost</span>
+        <span class="str">"output:Copper Ingot"</span>: <span class="num">1</span> <span class="com">// Reward</span>
+    }
+]</pre>
+
+        <h4>C. Fight Node (Skirmish)</h4>
+        <p>Spawns a random enemy from the list repeatedly.</p>
+        <pre><code class="str">"fight:forest_fight:⚔️ Fight:forest.png"</code>: [
+    <span class="num">1000</span>,
+    <span class="str">"Combat..."</span>,
+    { <span class="str">"Spider"</span>: [<span class="num">1</span>, copperSpider] } <span class="com">// Enemy Table (Name: [Weight, Object])</span>
+]</pre>
+        <h4>D. Dungeon Node (Gauntlet)</h4>
+        <p>A sequential series of battles defined as an Array of Arrays. The player must survive Stage 1 to reach Stage 2. The final stage is usually a Boss.</p>
+        <div class="note">
+            <strong>Note:</strong> Dungeons are linear. If the player leaves or dies, progress resets to Stage 1.
+        </div>
+        <pre><code class="str">"dungeon:ruins_run:💀 Enter Dungeon:ruins.png; fn_interaction:dungeon_intro"</code>: [
+    <span class="com">// Stage 1: Easy Mobs</span>
+    [
+        <span class="num">1000</span>, <span class="com">// Interval</span>
+        <span class="str">"Fighting minions..."</span>, <span class="com">// Text</span>
+        { <span class="str">"Skeleton"</span>: [<span class="num">1</span>, skeletonObj] } <span class="com">// Enemy Table</span>
+    ],
+    <span class="com">// Stage 2: Harder</span>
+    [
+        <span class="num">1500</span>, 
+        <span class="str">"Deep inside..."</span>, 
+        { <span class="str">"Ghost"</span>: [<span class="num">1</span>, ghostObj] }
+    ],
+    <span class="com">// Stage 3: Boss</span>
+    [
+        <span class="num">2000</span>, 
+        <span class="str">"BOSS BATTLE"</span>, 
+        { <span class="str">"Lich King"</span>: [<span class="num">1</span>, lichBoss] }
+    ]
+]</pre>
+    </div>
+
+<div id="chapter2">
+        <h2>Chapter 2: Database & Entities</h2>
+        <p>Before you can reference items in quests or monsters in fights, you must define them in the static configuration blocks at the top of <code>game_data.js</code>.</p>
+
+        <h3 id="items">1. Item Definitions</h3>
+        <p>Items are defined in the <code>ITEM_DEFINITIONS</code> constant. The key is the exact name string used throughout the game.</p>
+        
+        <h4>A. Simple Item (Quest/Crafting Material)</h4>
+        <pre><code class="str">"Emerald root"</code>: { 
+    <span class="typ">description</span>: <span class="str">"A glowing green root used for alchemy."</span> 
+},</pre>
+
+        <h4>B. Equipment (Weapons & Armor)</h4>
+        <p>Equipment requires flags (<code>is_weapon</code>, <code>is_armor_body</code>, <code>is_armor_leggings</code>, etc.) and stats.</p>
+        <ul>
+            <li><strong>bonus_hp:</strong> Adds to Max HP.</li>
+            <li><strong>bonus_skills:</strong> <code>new Skills(Attack, Defense, Heal, Luck)</code></li>
+        </ul>
+        <pre><code class="str">"Rose Rapier"</code>: { 
+    <span class="typ">is_weapon</span>: <span class="kwd">true</span>, 
+    <span class="typ">bonus_skills</span>: <span class="kwd">new</span> Skills(<span class="num">5</span>, <span class="num">1</span>, <span class="num">0</span>, <span class="num">3</span>) <span class="com">// Atk:5, Def:1, Heal:0, Lck:3</span>
+},
+
+<code class="str">"Leather vest"</code>: { 
+    <span class="typ">is_armor_body</span>: <span class="kwd">true</span>, 
+    <span class="typ">bonus_hp</span>: <span class="num">5</span>, 
+    <span class="typ">bonus_skills</span>: <span class="kwd">new</span> Skills(<span class="num">0</span>, <span class="num">2</span>, <span class="num">0</span>, <span class="num">0</span>) 
+},</pre>
+
+        <h3 id="enemies">2. Enemy Configuration</h3>
+        <p>Enemies are instantiated objects usually assigned to a <code>const</code> variable. This variable name is what you pass into the <strong>Fight</strong> or <strong>Dungeon</strong> nodes.</p>
+        
+        <p><strong>Syntax:</strong> <code>new Enemy(Name, HP, LootTable, Skills)</code></p>
+        
+        <pre><span class="kwd">const</span> copperSpider = <span class="kwd">new</span> Enemy(
+    <span class="str">"Copper spider"</span>,  <span class="com">// Name displayed in HUD</span>
+    <span class="num">10</span>,               <span class="com">// Max HP</span>
+    { <span class="str">"Copper spider legs"</span>: <span class="num">1</span> }, <span class="com">// Loot Table (Name: Weight)</span>
+    <span class="kwd">new</span> Skills(<span class="num">4</span>, <span class="num">2</span>, <span class="num">0</span>, <span class="num">1</span>)       <span class="com">// Stats (Atk, Def, Heal, Luck)</span>
+);
+
+<span class="kwd">const</span> ruinBoss = <span class="kwd">new</span> Enemy(
+    <span class="str">"Crimson Keeper"</span>, 
+    <span class="num">30</span>, 
+    <span class="com">// Bosses can drop multiple items (higher weights = more common)</span>
+    { <span class="str">"Rose Rapier"</span>: <span class="num">1</span>, <span class="str">"Diamond key"</span>: <span class="num">1</span> }, 
+    <span class="kwd">new</span> Skills(<span class="num">8</span>, <span class="num">5</span>, <span class="num">2</span>, <span class="num">1</span>)
+);</pre>
+    </div>
+
+    <div id="chapter3">
+        <h2>Chapter 3: Creating Quests</h2>
+        <p>Quests are created by linking a <strong>Scene Node</strong> (NPC) to a <strong>Logic Block</strong> in the Registry.</p>
+
+        <h3 id="registry">1. The Interaction Registry</h3>
+        <p>The <code>INTERACTION_REGISTRY</code> is an object where keys are Logic IDs (e.g., <code>"merchant_logic"</code>) and values are <strong>Priority Lists</strong> of rules.</p>
+        <p>The engine checks rules from <strong>Top to Bottom</strong>. The first rule where the <code>condition</code> is met executes.</p>
+
+        <h3 id="fetch-quest">2. Example: Fetch Quest (Gather & Return)</h3>
+        <p><strong>Goal:</strong> Merchant wants 3 Apples. <br><strong>Prerequisite:</strong> Add "Apple" to <code>ITEM_DEFINITIONS</code> and <code>GlobalState.quest_merchant = "not_started"</code>.</p>
+
+        <div class="code-header">Step 1: Write the Logic in Registry</div>
+        <pre><code class="typ">"merchant_quest_logic"</code>: [
+    {   <span class="com">// PRIORITY 1: Turn In (Has items + Quest Started)</span>
+        <span class="typ">condition</span>: [
+            { <span class="typ">var</span>: <span class="str">"quest_merchant"</span>, <span class="typ">op</span>: <span class="str">"=="</span>, <span class="typ">val</span>: <span class="str">"started"</span> },
+            { <span class="typ">type</span>: <span class="str">"item"</span>, <span class="typ">id</span>: <span class="str">"Apple"</span>, <span class="typ">op</span>: <span class="str">">="</span>, <span class="typ">val</span>: <span class="num">3</span> }
+        ],
+        <span class="typ">data</span>: {
+            <span class="typ">dialogue</span>: merchantThankYouData,
+            <span class="typ">on_finish</span>: {
+                <span class="typ">actions</span>: [
+                    { <span class="typ">type</span>: <span class="str">"consume"</span>, <span class="typ">item</span>: <span class="str">"Apple"</span>, <span class="typ">count</span>: <span class="num">3</span> },
+                    { <span class="typ">type</span>: <span class="str">"reward"</span>, <span class="typ">item</span>: <span class="str">"Gold"</span>, <span class="typ">count</span>: <span class="num">50</span> },
+                    { <span class="typ">type</span>: <span class="str">"set_state"</span>, <span class="typ">key</span>: <span class="str">"quest_merchant"</span>, <span class="typ">val</span>: <span class="str">"completed"</span> }
+                ]
+            }
+        }
+    },
+    {   <span class="com">// PRIORITY 2: Waiting (Quest Started but missing items)</span>
+        <span class="typ">condition</span>: { <span class="typ">var</span>: <span class="str">"quest_merchant"</span>, <span class="typ">op</span>: <span class="str">"=="</span>, <span class="typ">val</span>: <span class="str">"started"</span> },
+        <span class="typ">data</span>: { <span class="typ">log_only</span>: <span class="str">"Merchant: I need 3 Apples!"</span> }
+    },
+    {   <span class="com">// PRIORITY 3: Start Quest (Default)</span>
+        <span class="typ">condition</span>: <span class="str">"default"</span>,
+        <span class="typ">data</span>: {
+            <span class="typ">dialogue</span>: merchantStartData, <span class="com">// Dialogue with choices</span>
+            <span class="typ">binding</span>: <span class="str">"accept_merchant"</span>,  <span class="com">// Variable to store answer</span>
+            <span class="typ">on_finish</span>: {
+                <span class="typ">check_var</span>: <span class="str">"accept_merchant"</span>,
+                <span class="typ">if_true</span>: {
+                    <span class="typ">actions</span>: [{ <span class="typ">type</span>: <span class="str">"set_state"</span>, <span class="typ">key</span>: <span class="str">"quest_merchant"</span>, <span class="typ">val</span>: <span class="str">"started"</span> }]
+                }
+            }
+        }
+    }
+]</pre>
+
+        <h3 id="rescue-quest">3. Example: Rescue Quest (Gate & Key)</h3>
+        <p><strong>Goal:</strong> Find Key in Dungeon -> Unlock Door.</p>
+        <p>This does not require a complex registry. It mostly uses the <code>condition</code> check.</p>
+        <pre><code class="typ">"door_logic"</code>: [
+    {
+        <span class="typ">condition</span>: { <span class="typ">type</span>: <span class="str">"item"</span>, <span class="typ">id</span>: <span class="str">"Boss Key"</span>, <span class="typ">op</span>: <span class="str">">="</span>, <span class="typ">val</span>: <span class="num">1</span> },
+        <span class="typ">data</span>: {
+            <span class="typ">dialogue</span>: princessRescueData,
+            <span class="typ">on_finish</span>: {
+                <span class="typ">actions</span>: [
+                    { <span class="typ">type</span>: <span class="str">"set_state"</span>, <span class="typ">key</span>: <span class="str">"quest_princess"</span>, <span class="typ">val</span>: <span class="str">"saved"</span> },
+                    { <span class="typ">type</span>: <span class="str">"log"</span>, <span class="typ">text</span>: <span class="str">"You unlocked the door!"</span> }
+                ]
+            }
+        }
+    },
+    {
+        <span class="typ">condition</span>: <span class="str">"default"</span>,
+        <span class="typ">data</span>: { <span class="typ">log_only</span>: <span class="str">"The door is locked. You need a key."</span> }
+    }
+]</pre>
+    </div>
+
+    <div id="chapter4">
+        <h2>Chapter 4: Advanced Logic</h2>
+
+        <h3 id="oneshots">1. One-Shot Events</h3>
+        <p>Use this for tutorials, boss intros, or "creepy atmosphere" messages when entering a zone for the first time.</p>
+        <p><strong>Map Hook:</strong> <code>fn_interaction:woods_intro</code></p>
+        <pre><code class="typ">"woods_intro"</code>: [
+    {   <span class="com">// If already visited, do nothing (pass through)</span>
+        <span class="typ">condition</span>: { <span class="typ">var</span>: <span class="str">"woods_visited"</span>, <span class="typ">op</span>: <span class="str">"=="</span>, <span class="typ">val</span>: <span class="kwd">true</span> },
+        <span class="typ">data</span>: {} 
+    },
+    {   <span class="com">// Default: First time</span>
+        <span class="typ">condition</span>: <span class="str">"default"</span>,
+        <span class="typ">data</span>: {
+            <span class="typ">dialogue</span>: spookyTextData,
+            <span class="typ">on_finish</span>: {
+                <span class="typ">actions</span>: [{ <span class="typ">type</span>: <span class="str">"set_state"</span>, <span class="typ">key</span>: <span class="str">"woods_visited"</span>, <span class="typ">val</span>: <span class="kwd">true</span> }]
+            }
+        }
+    }
+]</pre>
+
+        <h3 id="teleports">2. Teleportation (Goto)</h3>
+        <p>You can move the player to any node in the map that has a valid ID.</p>
+        <ul>
+            <li><strong>Action Type:</strong> <code>goto</code></li>
+            <li><strong>Target:</strong> The ID string from the map key (e.g., <code>scene:TOWN_ID:Name...</code>).</li>
+        </ul>
+        <pre><span class="com">// Example action inside on_finish</span>
+<span class="typ">actions</span>: [
+    { <span class="typ">type</span>: <span class="str">"log"</span>, <span class="typ">text</span>: <span class="str">"You fell into a trap!"</span> },
+    { <span class="typ">type</span>: <span class="str">"goto"</span>, <span class="typ">target</span>: <span class="str">"dungeon_level_1"</span> }
+]</pre>
+
+    </div>
+</main>
+
+</body>
+</html>

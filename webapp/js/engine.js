@@ -2,6 +2,27 @@
 function dictDraw(dct) { let norm=0; let entries=[]; for(let key in dct){ let w=dct[key]; let i=key; if(Array.isArray(w)){ i=w[1]; w=w[0]; } if(w<0) return null; norm+=w; entries.push({item:i, weight:w}); } let r=Math.random()*norm; let acc=0; for(let e of entries){ acc+=e.weight; if(r<acc) return e.item; } return null; }
 function createFloatingTextPlaceholder(filename, extraClasses = "") { const div = document.createElement('div'); div.className = `missing-asset-placeholder ${extraClasses}`; div.innerText = `FILE NOT FOUND:\n${filename}`; return div; }
 function safelySetBackgroundImage(containerId, imgId, basePath, filename) { const container = document.getElementById(containerId); const img = document.getElementById(imgId); img.style.display = 'block'; const existingPlaceholder = container.querySelector('.missing-asset-placeholder'); if (existingPlaceholder) container.removeChild(existingPlaceholder); img.onerror = function() { this.style.display = 'none'; container.appendChild(createFloatingTextPlaceholder(filename)); }; img.src = basePath + filename; }
+const findPathToNode = (tree, targetId, currentPath = []) => {
+    // Returns an Array: [{key, node}, {key, node}...] representing the path from Root to Target
+    for (let key in tree) {
+        // Parse the Key
+        const parts = key.split(';')[0].split(':');
+        const id = parts[1];
+
+        // 1. Found the target? Return the full path including this node.
+        if (id === targetId) {
+            return [...currentPath, { key: key, node: tree[key] }];
+        }
+
+        // 2. Is this a folder? Recurse.
+        const childNode = tree[key];
+        if (childNode && typeof childNode === 'object' && !Array.isArray(childNode)) {
+            const result = findPathToNode(childNode, targetId, [...currentPath, { key: key, node: tree[key] }]);
+            if (result) return result;
+        }
+    }
+    return null;
+};
 
 // --- CHARACTER MENU LOGIC ---
 class CharacterMenu {
@@ -44,6 +65,128 @@ class CharacterMenu {
     }
 }
 
+// --- SCENE FUNCTIONS (THE ENGINE LOGIC) ---
+const SceneFunctions = {
+
+    // 2. GENERIC INTERACTION PROCESSOR
+    fn_interaction: function(next, interactionId) {
+        const rules = INTERACTION_REGISTRY[interactionId];
+        if (!rules) { console.error("Missing interaction:", interactionId); if(next) next(); return; }
+
+        // Find matching rule
+        let activeRule = rules.find(r => {
+            if (r.condition === "default") return true;
+            const conditions = Array.isArray(r.condition) ? r.condition : [r.condition];
+            return conditions.every(cond => {
+                if (cond.type === "item") {
+                    const count = Game.player.getItemCount(cond.id);
+                    if (cond.op === ">=") return count >= cond.val;
+                    if (cond.op === "==") return count == cond.val;
+                } else {
+                    const val = GlobalState.variables[cond.var] !== undefined ? GlobalState.variables[cond.var] : GlobalState[cond.var];
+                    if (cond.op === "==") return val == cond.val;
+                    if (cond.op === "!=") return val != cond.val;
+                    if (cond.op === "in") return cond.val.includes(val);
+                }
+                return false;
+            });
+        });
+
+        if (!activeRule) { if(next) next(); return; }
+        const data = activeRule.data;
+
+        // EXECUTION HELPER
+        const executeActions = (actList) => {
+            if (!actList) return;
+            actList.forEach(act => {
+                if (act.type === "set_state") {
+                    if (act.key in GlobalState) GlobalState[act.key] = act.val;
+                    else GlobalState.variables[act.key] = act.val;
+                }
+                else if (act.type === "reward") Game.player.addItem(act.item, act.count);
+                else if (act.type === "consume") Game.player.addItem(act.item, -act.count);
+                else if (act.type === "log") Game.log(act.text);
+                else if (act.type === "goto") {
+                    // 1. Find the hierarchical path (e.g., [Root, Town, House])
+                    const fullPath = findPathToNode(worldMap, act.target);
+                    
+                    if (fullPath && fullPath.length > 0) {
+                        // 2. The Target is the last item in the path
+                        const target = fullPath.pop(); 
+
+                        // 3. REBUILD THE STACK (The Magic Step)
+                        // We wipe the current history and replace it with the path's parents.
+                        Game.pathStack = fullPath.map(step => {
+                            // We need to parse the key to get the Title and Image for the stack
+                            const info = Game.parseKey(step.key); 
+                            return {
+                                node: step.node,
+                                title: info.id,
+                                image: info.image,
+                                cursor: 0 // Reset cursor for parents
+                            };
+                        });
+
+                        // 4. Cheat: Set currentNode to null so enterScene doesn't push the OLD location (Tavern)
+                        Game.currentNode = null; 
+
+                        // 5. Enter the target scene
+                        Game.enterScene(target.key, target.node);
+                        
+                    } else {
+                        console.error("Could not find path to scene ID:", act.target);
+                    }
+                }
+            });
+        };
+
+        if (data.log_only) {
+            Game.log(data.log_only);
+            if (next) next();
+            return;
+        }
+
+        if (data.binding) GlobalState.activeVariable = data.binding;
+
+        if (data.dialogue) {
+            Game.startDialogue(data.dialogue, () => {
+                if (data.on_finish) {
+                    const logic = data.on_finish;
+
+                    if (logic.check_var) {
+                        const val = GlobalState.variables[logic.check_var];
+                        if (logic.if_true && val) {
+                            if (logic.if_true.dialogue) {
+                                // NEW: Wait for dialogue to close before running actions
+                                Game.startDialogue(logic.if_true.dialogue, () => {
+                                    executeActions(logic.if_true.actions);
+                                });
+                            } else {
+                                executeActions(logic.if_true.actions);
+                            }
+                        } else if (logic.if_false && !val) {
+                                if (logic.if_false.dialogue) {
+                                Game.startDialogue(logic.if_false.dialogue, () => {
+                                    executeActions(logic.if_false.actions);
+                                });
+                            } else {
+                                executeActions(logic.if_false.actions);
+                            }
+                        }
+                        if (logic.if_value) {
+                            const branch = logic.if_value[val] || logic.if_value["default"];
+                            if (branch) executeActions(branch.actions);
+                        }
+                    }
+
+                    executeActions(logic.actions);
+                }
+                if (next) next();
+            });
+        }
+    }
+};
+
 // --- MAIN GAME ENGINE ---
 const Game = {
     player: new CharacterMenu(),
@@ -62,7 +205,7 @@ const Game = {
         document.getElementById('menu-toggle-btn').onclick = () => { this.toggleCharacterMenu(); };
         
         // Trigger root scene
-        const rootKey = "scene:open world:Open World:world_map.png; fn_intro";
+        const rootKey = "scene:open world:Open World:world_map.png; fn_interaction:intro_logic";
         const rootNode = worldMap[rootKey];
         this.enterScene(rootKey, rootNode);
     },
@@ -156,7 +299,7 @@ const Game = {
             if (GlobalState.variables && GlobalState.variables[variableName] !== undefined) {
                 return GlobalState.variables[variableName];
             }
-            return match; // Return original text if variable not found
+            return match;
         });
 
         document.getElementById('speaker-name').innerText = speaker; 
@@ -169,29 +312,56 @@ const Game = {
             const action = parts[1];
             const param = parts[2];
 
+            // 1. HANDLE SCENE/SCREEN EFFECTS
+            if (targetName === "Scene" || targetName === "Screen") {
+                if (action === "shake") {
+                    const container = document.body; // Shake the whole body
+                    container.classList.remove('anim-shake-screen');
+                    void container.offsetWidth; // Trigger reflow
+                    container.classList.add('anim-shake-screen');
+                }
+                return; // Stop processing, as this isn't a sprite
+            }
+
+            // 2. HANDLE SPRITE EFFECTS
             const wrapper = document.getElementById('sprite-' + targetName);
             if (!wrapper) return;
 
             let img = wrapper.querySelector('.character-sprite') || wrapper.querySelector('.missing-asset-placeholder');
             
+            // Clean up old one-shot animations
             if(img) {
                 img.classList.remove('anim-fade-in', 'anim-fade-out', 'anim-shake');
                 void img.offsetWidth; 
             }
 
+            // Helper to get current scale (stored in dataset) or default to 1
+            const getScale = () => wrapper.dataset.scale || "1";
+
             switch (action) {
                 case 'fade in': if(img) img.classList.add('anim-fade-in'); wrapper.style.opacity = '1'; break;
                 case 'fade out': if(img) img.classList.add('anim-fade-out'); break;
                 case 'shake': wrapper.style.opacity = '1'; if(img) img.classList.add('anim-shake'); break;
+                case 'show': wrapper.style.opacity = '1'; break;
+                case 'hide': wrapper.style.opacity = '0'; break;
                 case 'move':
                     if (param) {
                         let coords = param.replace(/[()]/g, '').split(',');
                         if (coords.length === 2) {
                             wrapper.style.left = coords[0]; wrapper.style.bottom = coords[1];
-                            wrapper.style.transform = `translateX(-${coords[0]})`;
+                            // Apply Translation AND Scale
+                            wrapper.style.transform = `translateX(-${coords[0]}) scale(${getScale()})`;
                         }
                     }
                     break;
+                case 'scale':
+                    if (param) {
+                        wrapper.dataset.scale = param; // Store state
+                        // Apply Scale AND preserve current Translation (left)
+                        wrapper.style.transform = `translateX(-${wrapper.style.left}) scale(${param})`;
+                    }
+                    break;
+
                 case 'change_sprite':
                     if (param) {
                         const handleError = (imgElement, srcParam) => {
@@ -210,8 +380,6 @@ const Game = {
                         }
                     }
                     break;
-                case 'show': wrapper.style.opacity = '1'; break;
-                case 'hide': wrapper.style.opacity = '0'; break;
             }
         });
 
@@ -323,15 +491,33 @@ const Game = {
         const activeEl = menuContainer.children[this.cursor]; if(activeEl) activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     },
     log: function(msg) { const container = document.getElementById('toast-container'); const toast = document.createElement('div'); toast.className = 'toast'; toast.textContent = msg; container.appendChild(toast); setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 2500); },
-    
+
     parseKey: function(keyString) { 
         const splitFunc = keyString.split(';');
         const propStr = splitFunc[0];
-        const funcName = splitFunc[1] ? splitFunc[1].trim() : null;
+        
+        // NEW: Handle Function Arguments (split by :)
+        let funcName = null;
+        let funcArg = null;
+        
+        if (splitFunc[1]) {
+            const rawFunc = splitFunc[1].trim();
+            const fParts = rawFunc.split(':'); // Split "fn_name:arg"
+            funcName = fParts[0];
+            funcArg = fParts[1] || null;
+        }
+
         const parts = propStr.split(':'); 
-        return { role: parts[0], id: parts[1], name: parts[2] || parts[1], image: parts[3] || "placeholder.png", onEnter: funcName }; 
+        return { 
+            role: parts[0], 
+            id: parts[1], 
+            name: parts[2] || parts[1], 
+            image: parts[3] || "placeholder.png", 
+            onEnter: funcName,      // e.g., "fn_interaction"
+            onEnterArg: funcArg     // e.g., "mayor_logic"
+        }; 
     },
-    
+
     enterScene: function(keyString, nodeObj) {
         const info = this.parseKey(keyString);
         if (nodeObj !== null) {
@@ -339,9 +525,13 @@ const Game = {
             let place_name = info.id;
             this.currentNode = nodeObj; this.currentTitle = place_name; this.currentImage = info.image; this.cursor = 0; this.stopAction();
         }
-        if (info.onEnter && SceneFunctions[info.onEnter]) { SceneFunctions[info.onEnter](); }
+        // CHANGED: Pass info.onEnterArg as the second argument
+        if (info.onEnter && SceneFunctions[info.onEnter]) { 
+            SceneFunctions[info.onEnter](null, info.onEnterArg); 
+        }
         this.render();
     },
+
     returnScene: function() { if (this.pathStack.length === 0) return; const previous = this.pathStack.pop(); this.currentNode = previous.node; this.currentTitle = previous.title; this.currentImage = previous.image; this.cursor = previous.cursor; this.stopAction(); this.render(); },
     stopAction: function() { 
         if (this.activeInterval) { 
@@ -371,7 +561,8 @@ const Game = {
         };
 
         if (info.onEnter && info.role !== "scene" && SceneFunctions[info.onEnter]) {
-            SceneFunctions[info.onEnter](runAction);
+            // CHANGED: Pass runAction as 'next', and info.onEnterArg as the ID
+            SceneFunctions[info.onEnter](runAction, info.onEnterArg);
             if (this.inDialogue) return; 
         } else {
             runAction();
@@ -491,4 +682,5 @@ const Game = {
         });
     }
 };
+
 Game.init();
