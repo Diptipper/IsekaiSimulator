@@ -2,19 +2,43 @@
 function dictDraw(dct) { let norm=0; let entries=[]; for(let key in dct){ let w=dct[key]; let i=key; if(Array.isArray(w)){ i=w[1]; w=w[0]; } if(w<0) return null; norm+=w; entries.push({item:i, weight:w}); } let r=Math.random()*norm; let acc=0; for(let e of entries){ acc+=e.weight; if(r<acc) return e.item; } return null; }
 function createFloatingTextPlaceholder(filename, extraClasses = "") { const div = document.createElement('div'); div.className = `missing-asset-placeholder ${extraClasses}`; div.innerText = `FILE NOT FOUND:\n${filename}`; return div; }
 function safelySetBackgroundImage(containerId, imgId, basePath, filename) { const container = document.getElementById(containerId); const img = document.getElementById(imgId); img.style.display = 'block'; const existingPlaceholder = container.querySelector('.missing-asset-placeholder'); if (existingPlaceholder) container.removeChild(existingPlaceholder); img.onerror = function() { this.style.display = 'none'; container.appendChild(createFloatingTextPlaceholder(filename)); }; img.src = basePath + filename; }
-const findPathToNode = (tree, targetId, currentPath = []) => {
-    // Returns an Array: [{key, node}, {key, node}...] representing the path from Root to Target
+const findSceneNode = (tree, targetId, visited = new Set()) => {
+    // 1. Avoid infinite loops in recursive maps (Town -> House -> Town)
+    if (typeof tree !== 'object' || tree === null) return null;
+    if (visited.has(tree)) return null;
+    visited.add(tree);
+
     for (let key in tree) {
-        // Parse the Key
+        // Check for key format before splitting
+        if (!key.includes(':')) continue;
+
         const parts = key.split(';')[0].split(':');
         const id = parts[1];
 
-        // 1. Found the target? Return the full path including this node.
+        // Found it?
+        if (id === targetId) {
+            return { key: key, node: tree[key] };
+        }
+
+        const childNode = tree[key];
+        // Recurse into children
+        if (childNode && typeof childNode === 'object' && !Array.isArray(childNode)) {
+            const result = findSceneNode(childNode, targetId, visited);
+            if (result) return result;
+        }
+    }
+    return null;
+};
+const findPathToNode = (tree, targetId, currentPath = []) => {
+    for (let key in tree) {
+        const parts = key.split(';')[0].split(':');
+        const id = parts[1];
+
+        // Found it? Return the path including this node
         if (id === targetId) {
             return [...currentPath, { key: key, node: tree[key] }];
         }
 
-        // 2. Is this a folder? Recurse.
         const childNode = tree[key];
         if (childNode && typeof childNode === 'object' && !Array.isArray(childNode)) {
             const result = findPathToNode(childNode, targetId, [...currentPath, { key: key, node: tree[key] }]);
@@ -23,7 +47,80 @@ const findPathToNode = (tree, targetId, currentPath = []) => {
     }
     return null;
 };
+const Compressor = {
+    // 1. LZW Compression: String -> Array of Numbers
+    compress: function(uncompressed) {
+        let i, dictionary = {}, c, wc, w = "", result = [], dictSize = 256;
+        for (i = 0; i < 256; i += 1) dictionary[String.fromCharCode(i)] = i;
+        for (i = 0; i < uncompressed.length; i += 1) {
+            c = uncompressed.charAt(i);
+            wc = w + c;
+            if (dictionary.hasOwnProperty(wc)) {
+                w = wc;
+            } else {
+                result.push(dictionary[w]);
+                dictionary[wc] = dictSize++;
+                w = String(c);
+            }
+        }
+        if (w !== "") result.push(dictionary[w]);
+        return result;
+    },
 
+    // 2. LZW Decompression: Array of Numbers -> String
+    decompress: function(compressed) {
+        let i, dictionary = [], w, result, k, entry = "", dictSize = 256;
+        for (i = 0; i < 256; i += 1) dictionary[i] = String.fromCharCode(i);
+        w = String.fromCharCode(compressed[0]);
+        result = w;
+        for (i = 1; i < compressed.length; i += 1) {
+            k = compressed[i];
+            if (dictionary[k]) entry = dictionary[k];
+            else if (k === dictSize) entry = w + w.charAt(0);
+            else return null;
+            result += entry;
+            dictionary[dictSize++] = w + entry.charAt(0);
+            w = entry;
+        }
+        return result;
+    },
+
+    // 3. Encode: LZW Numbers -> 16bit Array -> 8bit Bytes -> Base64
+    encode: function(str) {
+        const data = this.compress(str); // Array of integers > 255
+        
+        // Convert to 16-bit Typed Array
+        const arr16 = new Uint16Array(data);
+        
+        // Read the 16-bit buffer as 8-bit bytes
+        const arr8 = new Uint8Array(arr16.buffer);
+        
+        // Convert bytes to binary string (Safe for btoa)
+        // Note: We loop manually to avoid stack overflow on large saves
+        let binary = '';
+        for (let i = 0; i < arr8.byteLength; i++) {
+            binary += String.fromCharCode(arr8[i]);
+        }
+        
+        return btoa(binary);
+    },
+
+    // 4. Decode: Base64 -> 8bit Bytes -> 16bit Array -> LZW Decompress
+    decode: function(base64) {
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        
+        // Convert binary string back to bytes
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        
+        // Reconstruct 16-bit array from bytes
+        const arr16 = new Uint16Array(bytes.buffer);
+        
+        return this.decompress(Array.from(arr16));
+    }
+};
 // --- CHARACTER MENU LOGIC ---
 class CharacterMenu {
     constructor() { this.name="Player"; this.exp=0; this.inventory={}; this.equipment={weapon:null, body:null, leggings:null}; this.active=false; this.hp=10; this.skills=new Skills(4,2,1,1); this.menuCursor=0; this.interactables=[]; }
@@ -50,30 +147,94 @@ class CharacterMenu {
     moveCursor(o) { if(this.interactables.length===0)return; this.menuCursor+=o; if(this.menuCursor<0)this.menuCursor=this.interactables.length-1; if(this.menuCursor>=this.interactables.length)this.menuCursor=0; Game.render(); }
     selectOption() { if(this.interactables.length===0)return; const t=this.interactables[this.menuCursor]; if(t.type==='slot')this.unequipItem(t.id); else if(t.type==='item')this.equipItem(t.id); else if(t.type==='close') Game.toggleCharacterMenu(); }
     getDisplayHTML() {
-        this.interactables=[]; let c=0, invH="", keys=Object.keys(this.inventory), equipH="";
-        ['weapon','body','leggings'].forEach(s=>{ let i=this.equipment[s]; this.interactables.push({type:'slot',id:s}); let sel=(c===this.menuCursor); c++; let sc="equip-slot"+(sel?" menu-focus-row":""); equipH+=`<div class="${sc}"><span>${i?`${i.name} <span class="inv-btn" onclick="Game.player.unequipItem('${s}')">Unequip</span>`:`<span style="color:#666">Empty ${s}</span>`}</span></div>`; });
-        if(keys.length>0){ keys.forEach(k=>{ let i=this.inventory[k], dc=Number.isInteger(i.amount)?i.amount:i.amount.toFixed(1), ce=(i.is_weapon||i.is_armor_body||i.is_armor_leggings); this.interactables.push({type:ce?'item':'none',id:k}); let sel=(c===this.menuCursor); c++; let rs="display:flex; justify-content:space-between; margin-bottom:4px; padding:2px 4px; border-radius:4px; border:1px solid transparent;"+(sel?" border-color: var(--accent); background: rgba(255,255,255,0.1);":""); invH+=`<div class="${sel?"menu-focus-row":""}" style="${rs}"><span>- ${i.name} x${dc}</span>${ce?`<span class="inv-btn" onclick="Game.player.equipItem('${k}')">Equip</span>`:""}</div>`; }); } else { invH="<div style='color:#666; font-style:italic'>(Bag is empty)</div>"; }
-        let cs=this.getCombatSkills(), fs=(b,t)=>{let bo=t-b;return bo>0?`${b}<span style="color:#4f4">+${bo}</span>`:`${b}`;};
-        this.interactables.push({type:'close', id:'close'});
-        let closeSel = (c === this.menuCursor); let closeClass = "menu-item" + (closeSel ? " menu-focus-row" : "");
-        let closeBtn = `<div class="${closeClass}" style="justify-content:center; margin-top:15px; background:#444; color:#fff; font-weight:bold; text-align:center;" onclick="Game.toggleCharacterMenu()">CLOSE BAG</div>`;
+        this.interactables = [];
+        let c = 0, invH = "", keys = Object.keys(this.inventory), equipH = "";
+        ['weapon', 'body', 'leggings'].forEach(s => {
+            let i = this.equipment[s];
+            this.interactables.push({ type: 'slot', id: s });
+            let sel = (c === this.menuCursor); c++;
+            let sc = "equip-slot" + (sel ? " menu-focus-row" : "");
+            equipH += `<div class="${sc}"><span>${i ? `${i.name} <span class="inv-btn" onclick="Game.player.unequipItem('${s}')">Unequip</span>` : `<span style="color:#666">Empty ${s}</span>`}</span></div>`;
+        });
+        if (keys.length > 0) {
+            keys.forEach(k => {
+                let i = this.inventory[k], dc = Number.isInteger(i.amount) ? i.amount : i.amount.toFixed(1), ce = (i.is_weapon || i.is_armor_body || i.is_armor_leggings);
+                this.interactables.push({ type: ce ? 'item' : 'none', id: k });
+                let sel = (c === this.menuCursor); c++;
+                let rs = "display:flex; justify-content:space-between; margin-bottom:4px; padding:2px 4px; border-radius:4px; border:1px solid transparent;" + (sel ? " border-color: var(--accent); background: rgba(255,255,255,0.1);" : "");
+                invH += `<div class="${sel ? "menu-focus-row" : ""}" style="${rs}"><span>- ${i.name} x${dc}</span>${ce ? `<span class="inv-btn" onclick="Game.player.equipItem('${k}')">Equip</span>` : ""}</div>`;
+            });
+        } else {
+            invH = "<div style='color:#666; font-style:italic'>(Bag is empty)</div>";
+        }
+        let cs = this.getCombatSkills();
         let raw_skills = this.getRawCombatSkills();
-        return `<div style="font-family:'Courier New'; line-height:1.4; font-size:13px;"><div style="border-bottom:1px solid #555; margin-bottom:10px; padding-bottom:5px; text-align:center;"><strong>CHARACTER MENU</strong></div><div style="margin-bottom:10px;"><div style="color:var(--accent); font-weight:bold;">ATTRIBUTES</div>
-            <div>ATK: ${fs(raw_skills.attack,cs.attack)} | DEF: ${fs(raw_skills.defense,cs.defense)}</div>
-            <div>HEAL: ${fs(raw_skills.healing,cs.healing)} | LCK: ${fs(raw_skills.luck,cs.luck)}</div></div>
-            <div style="margin-bottom:10px;"><div style="color:var(--accent); font-weight:bold; margin-bottom:5px;">EQUIPMENT (Enter to Unequip)</div>${equipH}</div><div><div style="color:var(--accent); font-weight:bold; margin-bottom:5px;">INVENTORY (Enter to Equip)</div><div id="inv-scroll-container" style="max-height:150px; overflow-y:auto; padding-right:5px;">${invH}</div></div>${closeBtn}</div>`;
+        const fs = (base, total) => {
+            let bo = total - base;
+            return bo > 0 ? `${base}<span style="color:#4f4">+${bo}</span>` : `${base}`;
+        };
+        const skillLabels = { attack: "ATK", defense: "DEF", healing: "HEAL", luck: "LCK" };
+        let skillsHTML = '<div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">';
+        for (let key in skillLabels) {
+            if (cs[key] !== undefined) {
+                skillsHTML += `<div>${skillLabels[key]}: ${fs(raw_skills[key], cs[key])}</div>`;
+            }
+        }
+        skillsHTML += '</div>';
+
+        // Add HP Display
+        let hpHtml = `<div>HP: ${Math.floor(this.hp)} / ${this.getMaxHP()}</div>`;
+
+        // --- 4. CLOSE BUTTON & FINAL ASSEMBLY ---
+        this.interactables.push({ type: 'close', id: 'close' });
+        let closeSel = (c === this.menuCursor);
+        let closeClass = "menu-item" + (closeSel ? " menu-focus-row" : "");
+        let closeBtn = `<div class="${closeClass}" style="justify-content:center; margin-top:15px; background:#444; color:#fff; font-weight:bold; text-align:center;" onclick="Game.toggleCharacterMenu()">CLOSE BAG</div>`;
+
+        return `<div style="font-family:'Courier New'; line-height:1.4; font-size:13px;">
+            <div style="border-bottom:1px solid #555; margin-bottom:10px; padding-bottom:5px; text-align:center;"><strong>CHARACTER MENU</strong></div>
+            
+            <div style="margin-bottom:10px;">
+                <div style="color:var(--accent); font-weight:bold;">ATTRIBUTES</div>
+                ${hpHtml}
+                ${skillsHTML}
+            </div>
+
+            <div style="margin-bottom:10px;">
+                <div style="color:var(--accent); font-weight:bold; margin-bottom:5px;">EQUIPMENT (Enter to Unequip)</div>
+                ${equipH}
+            </div>
+            
+            <div>
+                <div style="color:var(--accent); font-weight:bold; margin-bottom:5px;">INVENTORY (Enter to Equip)</div>
+                <div id="inv-scroll-container" style="max-height:150px; overflow-y:auto; padding-right:5px;">${invH}</div>
+            </div>
+            ${closeBtn}
+        </div>`;
     }
 }
 
-// --- SCENE FUNCTIONS (THE ENGINE LOGIC) ---
+// --- SCENE FUNCTIONS ---
 const SceneFunctions = {
+    // 1. LEGACY INTRO COMBAT (Updated to check variables)
+    fn_intro_combat: function(next) {
+        // OLD: if (!GlobalState.combatIntroPlayed)
+        // NEW:
+        if (!GlobalState.variables["combatIntroPlayed"]) {
+            Game.startDialogue(introCombatData, () => {
+                GlobalState.variables["combatIntroPlayed"] = true;
+                if (next) next();
+            });
+        } else { if (next) next(); }
+    },
 
-    // 2. GENERIC INTERACTION PROCESSOR
+    // 2. INTERACTION PROCESSOR (Updated to strictly use variables)
+// Inside SceneFunctions ...
+
     fn_interaction: function(next, interactionId) {
         const rules = INTERACTION_REGISTRY[interactionId];
         if (!rules) { console.error("Missing interaction:", interactionId); if(next) next(); return; }
 
-        // Find matching rule
         let activeRule = rules.find(r => {
             if (r.condition === "default") return true;
             const conditions = Array.isArray(r.condition) ? r.condition : [r.condition];
@@ -83,7 +244,7 @@ const SceneFunctions = {
                     if (cond.op === ">=") return count >= cond.val;
                     if (cond.op === "==") return count == cond.val;
                 } else {
-                    const val = GlobalState.variables[cond.var] !== undefined ? GlobalState.variables[cond.var] : GlobalState[cond.var];
+                    const val = GlobalState.variables[cond.var];
                     if (cond.op === "==") return val == cond.val;
                     if (cond.op === "!=") return val != cond.val;
                     if (cond.op === "in") return cond.val.includes(val);
@@ -95,119 +256,340 @@ const SceneFunctions = {
         if (!activeRule) { if(next) next(); return; }
         const data = activeRule.data;
 
-        // EXECUTION HELPER
+        // --- Helper for executing actions (Rewards, State, Goto) ---
         const executeActions = (actList) => {
             if (!actList) return;
             actList.forEach(act => {
-                if (act.type === "set_state") {
-                    if (act.key in GlobalState) GlobalState[act.key] = act.val;
-                    else GlobalState.variables[act.key] = act.val;
-                }
+                if (act.type === "set_state") GlobalState.variables[act.key] = act.val;
                 else if (act.type === "reward") Game.player.addItem(act.item, act.count);
                 else if (act.type === "consume") Game.player.addItem(act.item, -act.count);
                 else if (act.type === "log") Game.log(act.text);
                 else if (act.type === "goto") {
-                    // 1. Find the hierarchical path (e.g., [Root, Town, House])
                     const fullPath = findPathToNode(worldMap, act.target);
-                    
                     if (fullPath && fullPath.length > 0) {
-                        // 2. The Target is the last item in the path
                         const target = fullPath.pop(); 
-
-                        // 3. REBUILD THE STACK (The Magic Step)
-                        // We wipe the current history and replace it with the path's parents.
+                        
+                        // REBUILD STACK
                         Game.pathStack = fullPath.map(step => {
-                            // We need to parse the key to get the Title and Image for the stack
                             const info = Game.parseKey(step.key); 
-                            return {
-                                node: step.node,
-                                title: info.id,
-                                image: info.image,
-                                cursor: 0 // Reset cursor for parents
+                            return { 
+                                key: step.key, // <--- THIS WAS MISSING! ADD THIS LINE.
+                                node: step.node, 
+                                title: info.name, 
+                                image: info.image, 
+                                cursor: 0 
                             };
                         });
-
-                        // 4. Cheat: Set currentNode to null so enterScene doesn't push the OLD location (Tavern)
-                        Game.currentNode = null; 
-
-                        // 5. Enter the target scene
-                        Game.enterScene(target.key, target.node);
                         
-                    } else {
-                        console.error("Could not find path to scene ID:", act.target);
+                        Game.currentNode = null; 
+                        Game.enterScene(target.key, target.node);
                     }
                 }
             });
         };
 
+        // 1. Log Only (Blocks execution briefly)
         if (data.log_only) {
             Game.log(data.log_only);
             if (next) next();
             return;
         }
 
+        // 2. Variable Binding
         if (data.binding) GlobalState.activeVariable = data.binding;
 
+        // 3. Dialogue (Blocking)
         if (data.dialogue) {
             Game.startDialogue(data.dialogue, () => {
+                // Dialogue Finished... check for post-dialogue logic
                 if (data.on_finish) {
                     const logic = data.on_finish;
-
                     if (logic.check_var) {
                         const val = GlobalState.variables[logic.check_var];
+                        
                         if (logic.if_true && val) {
-                            if (logic.if_true.dialogue) {
-                                // NEW: Wait for dialogue to close before running actions
-                                Game.startDialogue(logic.if_true.dialogue, () => {
-                                    executeActions(logic.if_true.actions);
-                                });
-                            } else {
-                                executeActions(logic.if_true.actions);
-                            }
+                             if (logic.if_true.dialogue) {
+                                 Game.startDialogue(logic.if_true.dialogue, () => { executeActions(logic.if_true.actions); });
+                             } else { executeActions(logic.if_true.actions); }
                         } else if (logic.if_false && !val) {
-                                if (logic.if_false.dialogue) {
-                                Game.startDialogue(logic.if_false.dialogue, () => {
-                                    executeActions(logic.if_false.actions);
-                                });
-                            } else {
-                                executeActions(logic.if_false.actions);
-                            }
+                             if (logic.if_false.dialogue) {
+                                 Game.startDialogue(logic.if_false.dialogue, () => { executeActions(logic.if_false.actions); });
+                             } else { executeActions(logic.if_false.actions); }
                         }
+                        
                         if (logic.if_value) {
                             const branch = logic.if_value[val] || logic.if_value["default"];
                             if (branch) executeActions(branch.actions);
                         }
                     }
-
                     executeActions(logic.actions);
                 }
+                
+                // RESUME GAME LOOP (Start Combat/Harvest)
                 if (next) next();
             });
+        } 
+        // 4. NO DIALOGUE (Pass-through) <--- THIS WAS MISSING
+        else {
+            // Execute any immediate actions (silent state updates)
+            if (data.on_finish) executeActions(data.on_finish.actions);
+            
+            // Resume Game Loop immediately
+            if (next) next();
         }
     }
 };
 
 // --- MAIN GAME ENGINE ---
 const Game = {
+    // --- STATE ---
     player: new CharacterMenu(),
-    currentNode: null, currentTitle: "", currentImage: "", pathStack: [], 
+    currentNode: null, 
+    currentTitle: "", 
+    currentImage: "", 
+    currentKey: "", // NEW: Track the ID string for saving
+    pathStack: [], 
+    
+    // --- UI/LOGIC FLAGS ---
     cursor: 0, 
-    choiceCursor: 0, // NEW: Tracks selection in dialogue questions
-    activeInterval: null, currentActionName: "", 
-    inCombat: false, inDialogue: false, dialogueQueue: [], dialogueIndex: 0, dialogueOnComplete: null,
+    choiceCursor: 0,
+    activeInterval: null, 
+    currentActionName: "", 
+    inCombat: false, 
+    inDialogue: false, 
+    inMainMenu: true, // NEW: Start in Main Menu
+    dialogueQueue: [], 
+    dialogueIndex: 0, 
+    dialogueOnComplete: null,
+    
+    // --- DUNGEON ---
     dungeonStages: [], dungeonIndex: 0, currentDungeonEnemy: null, dungeonTurn: 0,
-
     init: function() {
+        // 1. Setup Data
         this.player.hp = this.player.getMaxHP();
-        this.setupInput();
-        this.startPassiveRegen();
-        this.updatePlayerHUD();
-        document.getElementById('menu-toggle-btn').onclick = () => { this.toggleCharacterMenu(); };
         
-        // Trigger root scene
+        // 2. Setup UI Listeners (Must happen before showing menu)
+        this.setupUI(); 
+        this.setupInput();
+        
+        // 3. Start Game Loop
+        this.startPassiveRegen();
+        this.showMainMenu();
+    },
+
+    setupUI: function() {
+        console.log("Initializing UI..."); // Debug check
+
+        // Helper to safely attach
+        const attach = (id, fn) => {
+            const el = document.getElementById(id);
+            if(el) el.onclick = fn;
+            else console.warn("Missing UI Element:", id);
+        };
+
+        attach('menu-toggle-btn', () => this.toggleCharacterMenu());
+        attach('system-menu-btn', () => this.toggleSaveModal(true));
+        
+        // Modal Buttons
+        attach('btn-close-modal', () => this.toggleSaveModal(false));
+        attach('btn-copy-save', () => this.generateSave());
+        attach('btn-load-save', () => this.loadSave());
+    },
+    // --- MAIN MENU LOGIC ---
+    showMainMenu: function() {
+        this.inMainMenu = true;
+        this.stopAction();
+        
+        // Hide HUD elements
+        document.getElementById('hud-overlay').style.display = 'none';
+        document.getElementById('location-pill').style.display = 'none';
+        
+        // Set visual background
+        safelySetBackgroundImage('scene-bg-container', 'scene-image', "images/bg/", "title_screen.png"); // Ensure you have this or use a placeholder
+
+        // Render Menu Options
+        const menuContainer = document.getElementById('menu-list');
+        menuContainer.innerHTML = '';
+        
+        const options = ["Start New Game", "Load Game"];
+        this.cursor = 0;
+        const renderMenu = () => {
+            menuContainer.innerHTML = `
+                <div class="main-menu-screen">
+                <div class="title-text">
+                    ✨ ISEKAI SIMULATOR ✨
+                <br><span style="font-size:12px; color:#888;">
+                    Text Edition
+                </span></div><div id="mm-opts" style="width:100%"></div></div>`;
+                
+            const optsContainer = document.getElementById('mm-opts');
+            
+            options.forEach((opt, idx) => {
+                const el = document.createElement('div');
+                
+                // Ensure class matches the CSS
+                el.className = 'menu-item' + (idx === this.cursor ? ' active' : '');
+                
+                // Make sure inner HTML doesn't break the click target
+                el.innerHTML = `<span style="pointer-events: none;">${opt}</span>`; 
+                
+                el.onmouseenter = () => { 
+                    // 1. Update the internal tracker
+                    this.cursor = idx; 
+                    
+                    // 2. Visually update all siblings
+                    const allItems = optsContainer.querySelectorAll('.menu-item');
+                    allItems.forEach(item => item.classList.remove('active'));
+                    el.classList.add('active');
+                };
+
+                // The Click Listener
+                el.onclick = () => { 
+                    console.log("Menu Clicked:", idx);
+                    if(idx === 0) this.startNewGame();
+                    if(idx === 1) this.toggleSaveModal(true); 
+                };
+                
+                optsContainer.appendChild(el);
+            });
+        };
+        renderMenu();
+    },
+
+    startNewGame: function() {
+        this.inMainMenu = false;
+        document.getElementById('hud-overlay').style.display = 'flex';
+        document.getElementById('location-pill').style.display = 'block';
+        
+        // Reset State
+        this.player = new CharacterMenu();
+        this.player.hp = this.player.getMaxHP();
+        this.pathStack = [];
+        // Reset Global Variables
+        Object.keys(GlobalState.variables).forEach(k => {
+             // Simple reset logic: booleans to false, "not_started" strings
+             if(typeof GlobalState.variables[k] === 'boolean') GlobalState.variables[k] = false;
+             if(GlobalState.variables[k] === 'completed' || GlobalState.variables[k] === 'started') GlobalState.variables[k] = 'not_started';
+        });
+        
+        // Trigger Intro
         const rootKey = "scene:open world:Open World:world_map.png; fn_interaction:intro_logic";
-        const rootNode = worldMap[rootKey];
-        this.enterScene(rootKey, rootNode);
+        this.enterScene(rootKey, worldMap[rootKey]);
+    },
+
+    // --- SAVE / LOAD SYSTEM ---
+    
+    toggleSaveModal: function(show) {
+        const modal = document.getElementById('save-modal');
+        if(show) {
+            modal.classList.add('active');
+            document.getElementById('save-data-area').value = ""; // Clear on open
+            document.getElementById('save-msg').innerText = "";
+        } else {
+            modal.classList.remove('active');
+        }
+    },
+    generateSave: function() {
+        try {
+            // 1. Prepare Data (Same as before)
+            const p = this.player;
+            const pureInventory = [];
+            for (let k in p.inventory) pureInventory.push([k, p.inventory[k].amount]);
+
+            const pureEquip = [];
+            ['weapon', 'body', 'leggings'].forEach(slot => {
+                if (p.equipment[slot]) pureEquip.push(p.equipment[slot].name);
+            });
+
+            const locId = this.parseKey(this.currentKey).id;
+            const pureStack = this.pathStack.map(step => this.parseKey(step.key).id);
+
+            const saveData = {
+                v: GlobalState.variables,
+                l: locId,
+                s: pureStack,
+                p: { hp: p.hp, xp: p.exp, inv: pureInventory, eq: pureEquip }
+            };
+
+            const jsonStr = JSON.stringify(saveData);
+
+            // 2. COMPRESS & ENCODE
+            // Using our new LZW Compressor
+            const compressed = Compressor.encode(jsonStr);
+            
+            // Add a fun header so we know it's our save format
+            const finalStr = `RPG✨${compressed}`; 
+
+            const area = document.getElementById('save-data-area');
+            area.value = finalStr;
+            area.select();
+            document.execCommand('copy');
+            document.getElementById('save-msg').innerText = "Compressed Save Copied!";
+            document.getElementById('save-msg').style.color = "#4f4";
+
+        } catch (e) {
+            console.error(e);
+            document.getElementById('save-msg').innerText = "Error saving.";
+        }
+    },
+
+    loadSave: function() {
+        try {
+            let rawStr = document.getElementById('save-data-area').value.trim();
+            
+            // Validate Header
+            if (!rawStr.startsWith("RPG✨")) {
+                throw new Error("Missing Save Header");
+            }
+            
+            // Remove Header
+            rawStr = rawStr.replace("RPG✨", "");
+            
+            // 1. DECODE & DECOMPRESS
+            const jsonStr = Compressor.decode(rawStr);
+            const data = JSON.parse(jsonStr);
+
+            // 2. Restore State (Same as before)
+            GlobalState.variables = data.v;
+            this.player = new CharacterMenu();
+            this.player.hp = data.p.hp;
+            this.player.exp = data.p.xp;
+
+            data.p.inv.forEach(item => this.player.addItem(item[0], item[1]));
+            if (data.p.eq) data.p.eq.forEach(itemName => {
+                this.player.addItem(itemName, 1);
+                this.player.equipItem(itemName);
+            });
+
+            this.pathStack = [];
+            if (data.s) {
+                data.s.forEach(id => {
+                    const found = findSceneNode(worldMap, id);
+                    if (found) {
+                        const info = this.parseKey(found.key);
+                        this.pathStack.push({
+                            key: found.key, node: found.node,
+                            title: info.name, image: info.image, cursor: 0
+                        });
+                    }
+                });
+            }
+
+            const currentScene = findSceneNode(worldMap, data.l);
+            if (currentScene) {
+                this.inMainMenu = false;
+                this.toggleSaveModal(false);
+                document.getElementById('hud-overlay').style.display = 'flex';
+                document.getElementById('location-pill').style.display = 'block';
+                this.currentNode = null; 
+                this.enterScene(currentScene.key, currentScene.node);
+            }
+
+        } catch (e) {
+            console.error(e);
+            document.getElementById('save-msg').innerText = "Corrupt/Invalid Save";
+            document.getElementById('save-msg').style.color = "#f44";
+        }
     },
 
     startDialogue: function(dialogueObj, callback) {
@@ -491,48 +873,74 @@ const Game = {
         const activeEl = menuContainer.children[this.cursor]; if(activeEl) activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     },
     log: function(msg) { const container = document.getElementById('toast-container'); const toast = document.createElement('div'); toast.className = 'toast'; toast.textContent = msg; container.appendChild(toast); setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 2500); },
+    
+    parseKey: function(k) {
+        // Safety Check: If k is undefined/null, return a dummy object
+        if (!k) return { role: "null", id: "error", name: "Error", image: "" };
 
-    parseKey: function(keyString) { 
-        const splitFunc = keyString.split(';');
-        const propStr = splitFunc[0];
-        
-        // NEW: Handle Function Arguments (split by :)
-        let funcName = null;
-        let funcArg = null;
-        
-        if (splitFunc[1]) {
-            const rawFunc = splitFunc[1].trim();
-            const fParts = rawFunc.split(':'); // Split "fn_name:arg"
-            funcName = fParts[0];
-            funcArg = fParts[1] || null;
+        const s = k.split(';');
+        const p = s[0];
+        let fn = null;
+        let fa = null;
+        if (s[1]) {
+            const rf = s[1].trim();
+            const fp = rf.split(':');
+            fn = fp[0];
+            fa = fp[1] || null;
         }
-
-        const parts = propStr.split(':'); 
-        return { 
-            role: parts[0], 
-            id: parts[1], 
-            name: parts[2] || parts[1], 
-            image: parts[3] || "placeholder.png", 
-            onEnter: funcName,      // e.g., "fn_interaction"
-            onEnterArg: funcArg     // e.g., "mayor_logic"
-        }; 
+        const pa = p.split(':');
+        return {
+            role: pa[0],
+            id: pa[1],
+            name: pa[2] || pa[1],
+            image: pa[3] || "placeholder.png",
+            onEnter: fn,
+            onEnterArg: fa
+        };
     },
 
     enterScene: function(keyString, nodeObj) {
         const info = this.parseKey(keyString);
         if (nodeObj !== null) {
-            if (this.currentNode) this.pathStack.push({ node: this.currentNode, title: this.currentTitle, image: this.currentImage, cursor: this.cursor });
+            if (this.currentNode) {
+                // Save current key to the stack object
+                this.pathStack.push({ 
+                    key: this.currentKey, // Push the KEY, not just node
+                    node: this.currentNode, 
+                    title: this.currentTitle, 
+                    image: this.currentImage, 
+                    cursor: this.cursor 
+                });
+            }
             let place_name = info.id;
-            this.currentNode = nodeObj; this.currentTitle = place_name; this.currentImage = info.image; this.cursor = 0; this.stopAction();
+            this.currentNode = nodeObj; 
+            this.currentTitle = place_name; 
+            this.currentImage = info.image; 
+            this.currentKey = keyString; // <--- NEW: Track Key
+            this.cursor = 0; 
+            this.stopAction();
         }
-        // CHANGED: Pass info.onEnterArg as the second argument
         if (info.onEnter && SceneFunctions[info.onEnter]) { 
             SceneFunctions[info.onEnter](null, info.onEnterArg); 
         }
         this.render();
     },
 
-    returnScene: function() { if (this.pathStack.length === 0) return; const previous = this.pathStack.pop(); this.currentNode = previous.node; this.currentTitle = previous.title; this.currentImage = previous.image; this.cursor = previous.cursor; this.stopAction(); this.render(); },
+    returnScene: function() {
+        if (this.pathStack.length === 0) return;
+        
+        const p = this.pathStack.pop();
+        
+        this.currentNode = p.node;
+        this.currentTitle = p.title;
+        this.currentImage = p.image;
+        this.currentKey = p.key; // <--- ADD THIS LINE (Critical Fix)
+        this.cursor = p.cursor;
+        
+        this.stopAction();
+        this.render();
+    },
+    
     stopAction: function() { 
         if (this.activeInterval) { 
             clearInterval(this.activeInterval); this.activeInterval = null; this.currentActionName = ""; this.inCombat = false; this.hideEnemyHUD(); 
@@ -629,11 +1037,48 @@ const Game = {
         }
         this.updatePlayerHUD();
     },
-
-    // --- REVISED INPUT HANDLING ---
     setupInput: function() {
         document.addEventListener('keydown', (e) => {
-            // 1. Dialogue Choices (Highest Priority if active)
+            // 1. MAIN MENU INPUT (Unchanged)
+            if (this.inMainMenu) {
+                if (e.key === "ArrowUp") { 
+                    this.cursor = (this.cursor === 1) ? 0 : 1; 
+                    const menuItems = document.querySelectorAll('.menu-item');
+                    if(menuItems.length > 1) {
+                         menuItems[0].className = 'menu-item' + (this.cursor === 0 ? ' active' : '');
+                         menuItems[1].className = 'menu-item' + (this.cursor === 1 ? ' active' : '');
+                    }
+                }
+                else if (e.key === "ArrowDown") { 
+                    this.cursor = (this.cursor === 0) ? 1 : 0; 
+                    const menuItems = document.querySelectorAll('.menu-item');
+                    if(menuItems.length > 1) {
+                         menuItems[0].className = 'menu-item' + (this.cursor === 0 ? ' active' : '');
+                         menuItems[1].className = 'menu-item' + (this.cursor === 1 ? ' active' : '');
+                    }
+                }
+                else if (e.key === "Enter") {
+                    if (this.cursor === 0) this.startNewGame();
+                    else this.toggleSaveModal(true);
+                }
+                return;
+            }
+
+            // --- NEW: SYSTEM MENU SHORTCUT ---
+            // Open Save Menu with 'S'
+            if (e.key.toLowerCase() === "s" && !this.inDialogue && !this.player.active) {
+                this.toggleSaveModal(true);
+                return;
+            }
+            
+            // Close Save Menu with 'Escape' if it is open
+            if (e.key === "Escape" && document.getElementById('save-modal').classList.contains('active')) {
+                this.toggleSaveModal(false);
+                return;
+            }
+            // ----------------------------------
+
+            // 2. Dialogue Choices
             if (this.inDialogue && document.getElementById('dialogue-questions').classList.contains('active')) {
                  const btns = document.querySelectorAll('.choice-btn');
                  if (e.key === "ArrowUp") {
@@ -645,16 +1090,16 @@ const Game = {
                  } else if (e.key === "Enter") {
                      if(btns[this.choiceCursor]) btns[this.choiceCursor].click();
                  }
-                 return; // Stop other inputs
+                 return; 
             }
 
-            // 2. Standard Dialogue Advance
+            // 3. Standard Dialogue Advance
             if (this.inDialogue) {
                 if (e.key === "Enter") this.advanceDialogue();
                 return;
             }
 
-            // 3. Character Menu Navigation
+            // 4. Character Menu Navigation
             if (this.player.active) {
                 if (e.key === "ArrowUp") this.player.moveCursor(-1);
                 else if (e.key === "ArrowDown") this.player.moveCursor(1);
@@ -663,7 +1108,7 @@ const Game = {
                 return;
             }
 
-            // 4. World Navigation
+            // 5. World Navigation
             if (this.currentNode && Object.keys(this.currentNode).length > 0) {
                 if (e.key === "ArrowUp") {
                     this.cursor = (this.cursor - 1 + Object.keys(this.currentNode).length) % Object.keys(this.currentNode).length;
@@ -680,7 +1125,7 @@ const Game = {
             if (e.key.toLowerCase() === "c") this.toggleCharacterMenu();
             if (e.key === "Escape") this.stopAction();
         });
-    }
+    },
 };
 
 Game.init();

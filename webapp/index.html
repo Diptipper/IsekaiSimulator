@@ -3,18 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vertical RPG - Modular</title>
+    <title>Isekai Simulator</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
 <div id="game-device">
+    
     <div id="visual-panel">
         <div id="hud-overlay">
-             <div class="hud-row"><span id="player-name" class="hud-text">Player Lv.1</span><div id="menu-toggle-btn">Stats (C)</div></div>
-             <div class="hud-row"><span style="font-size:10px; width:20px;">HP</span><div class="bar-container"><div id="hud-hp-bar" class="bar-fill hp-fill" style="width: 100%;"></div></div></div>
-             <div class="hud-row"><span style="font-size:10px; width:20px;">EXP</span><div class="bar-container"><div id="hud-exp-bar" class="bar-fill exp-fill" style="width: 0%;"></div></div></div>
-             <div class="hud-row" id="dungeon-progress-row"><span style="font-size:10px; width:20px;">DGN</span><div class="bar-container"><div id="hud-dungeon-bar" class="bar-fill dungeon-fill" style="width: 0%;"></div></div></div>
+            <div class="hud-row" style="justify-content: space-between;">
+                <span id="player-name" class="hud-text">Player Lv.1</span>
+                <div style="display:flex; gap:5px;">
+                    <div id="system-menu-btn" class="hud-btn">System (S)</div>
+                    <div id="menu-toggle-btn" class="hud-btn">Stats (C)</div>
+                </div>
+            </div>
+            <div class="hud-row"><span style="font-size:10px; width:20px;">HP</span><div class="bar-container"><div id="hud-hp-bar" class="bar-fill hp-fill" style="width: 100%;"></div></div></div>
+            <div class="hud-row"><span style="font-size:10px; width:20px;">EXP</span><div class="bar-container"><div id="hud-exp-bar" class="bar-fill exp-fill" style="width: 0%;"></div></div></div>
+            <div class="hud-row" id="dungeon-progress-row"><span style="font-size:10px; width:20px;">DGN</span><div class="bar-container"><div id="hud-dungeon-bar" class="bar-fill dungeon-fill" style="width: 0%;"></div></div></div>
         </div>
 
         <div id="enemy-hud">
@@ -47,6 +54,20 @@
 
         <div id="dialogue-questions"></div>
     </div>
+
+    <div id="save-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>SYSTEM MENU</h3>
+            <textarea id="save-data-area" placeholder="Paste the save string here..."></textarea>
+            <div class="modal-controls">
+                <button id="btn-copy-save">📋 Generate Save</button>
+                <button id="btn-load-save">📂 Load from Text</button>
+                <button id="btn-close-modal" style="background:#555">Close</button>
+            </div>
+            <div id="save-msg"></div>
+        </div>
+    </div>
+
 </div>
 
 <script src="js/classes.js"></script>
