@@ -112,7 +112,7 @@ const Game = {
         document.getElementById('location-pill').style.display = 'none';
         safelySetBackgroundImage('scene-bg-container', 'scene-image', "images/bg/", "title_screen.png");
         const menuContainer = document.getElementById('menu-list'); menuContainer.innerHTML = '';
-        const options = ["Start New Game", "Load Game"]; this.cursor = 0;
+        const options = ["Start New Game", "Load Game"]; this.cursor = -1;
         
         const renderMenu = () => {
             menuContainer.innerHTML = `<div class="main-menu-screen"><div class="title-text">✨ ISEKAI SIMULATOR ✨<br><span style="font-size:12px; color:#888;">Text Edition</span></div><div id="mm-opts" style="width:100%"></div></div>`;
@@ -247,7 +247,7 @@ const Game = {
     log: function(msg) { const container = document.getElementById('toast-container'); const toast = document.createElement('div'); toast.className = 'toast'; toast.textContent = msg; container.appendChild(toast); setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 2500); },
     parseKey: function(k) { if (!k) return { role: "null", id: "error", name: "Error", image: "" }; const s = k.split(';'); const p = s[0]; let fn = null; let fa = null; if (s[1]) { const rf = s[1].trim(); const fp = rf.split(':'); fn = fp[0]; fa = fp[1] || null; } const pa = p.split(':'); return { role: pa[0], id: pa[1], name: pa[2] || pa[1], image: pa[3] || "placeholder.png", onEnter: fn, onEnterArg: fa }; },
 
-    enterScene: function(keyString, nodeObj) { const info = this.parseKey(keyString); if (nodeObj !== null) { if (this.currentNode) { this.pathStack.push({ key: this.currentKey, node: this.currentNode, title: this.currentTitle, image: this.currentImage, cursor: this.cursor }); } let place_name = info.id; this.currentNode = nodeObj; this.currentTitle = place_name; this.currentImage = info.image; this.currentKey = keyString; this.cursor = 0; this.stopAction(); } if (info.onEnter && SceneFunctions[info.onEnter]) { SceneFunctions[info.onEnter](null, info.onEnterArg); } this.render(); },
+    enterScene: function(keyString, nodeObj) { const info = this.parseKey(keyString); if (nodeObj !== null) { if (this.currentNode) { this.pathStack.push({ key: this.currentKey, node: this.currentNode, title: this.currentTitle, image: this.currentImage, cursor: this.cursor }); } let place_name = info.id; this.currentNode = nodeObj; this.currentTitle = place_name; this.currentImage = info.image; this.currentKey = keyString; this.cursor = -1; this.stopAction(); } if (info.onEnter && SceneFunctions[info.onEnter]) { SceneFunctions[info.onEnter](null, info.onEnterArg); } this.render(); },
     returnScene: function() { if (this.pathStack.length === 0) return; const p = this.pathStack.pop(); this.currentNode = p.node; this.currentTitle = p.title; this.currentImage = p.image; this.currentKey = p.key; this.cursor = p.cursor; this.stopAction(); this.render(); },
     stopAction: function() { if (this.activeInterval) { clearInterval(this.activeInterval); this.activeInterval = null; this.currentActionName = ""; this.inCombat = false; this.hideEnemyHUD(); this.dungeonIndex = 0; for (let key in this.player.inventory) { this.player.inventory[key].amount = Math.floor(this.player.inventory[key].amount); if (this.player.inventory[key].amount <= 0) delete this.player.inventory[key]; } this.render(); } },
     executeOption: function(specificKey = null) {

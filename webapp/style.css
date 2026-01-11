@@ -301,7 +301,7 @@ body {
     border: 1px solid rgba(255,255,255,0.05);
     font-family: var(--font-main);
 }
-.menu-item.active, .menu-item:hover { 
+.menu-item.active { 
     background: linear-gradient(90deg, rgba(212, 175, 55, 0.15) 0%, transparent 100%);
     color: var(--accent); 
     border-color: var(--accent); 
@@ -350,8 +350,7 @@ body {
     box-shadow: 0 4px 6px rgba(0,0,0,0.3);
 }
 
-.main-menu-screen .menu-item.active, 
-.main-menu-screen .menu-item:hover {
+.main-menu-screen .menu-item.active {
     background: linear-gradient(to right, var(--accent), #b7950b);
     color: #000; border-color: #fff;
     box-shadow: 0 0 15px var(--accent-glow);
@@ -406,7 +405,7 @@ body {
     font-family: var(--font-header); letter-spacing: 1px;
     box-shadow: 0 4px 6px rgba(0,0,0,0.3);
 }
-.choice-btn:hover, .choice-btn.selected { 
+.choice-btn.selected { 
     background: linear-gradient(to right, var(--accent), #b7950b);
     color: #000; border-color: #fff; 
     transform: scale(1.02); 
