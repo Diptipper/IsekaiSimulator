@@ -355,7 +355,7 @@ body {
     background: linear-gradient(to right, var(--accent), #b7950b);
     color: #000; border-color: #fff;
     box-shadow: 0 0 15px var(--accent-glow);
-    transform: scale(1.05) !important; /* Pop effect instead of slide */
+    transform: scale(1.05) !important;
     font-weight: bold;
 }
 
