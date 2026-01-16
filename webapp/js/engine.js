@@ -143,7 +143,7 @@ class CharacterMenu {
         this.interactables = [];
         let c = 0, invH = "", keys = Object.keys(this.inventory), equipH = "", follH = "";
         
-        // 1. EQUIPMENT (Unchanged)
+        // 1. EQUIPMENT
         ['weapon', 'body', 'leggings'].forEach(s => {
             let i = this.equipment[s];
             this.interactables.push({ type: 'slot', id: s });
@@ -153,14 +153,18 @@ class CharacterMenu {
             c++;
         });
 
-        // 2. FOLLOWERS (New Section)
+        // 2. FOLLOWERS (Fixed: Added onclick event)
         if(this.followers.length > 0) {
             this.followers.forEach((f, idx) => {
                 this.interactables.push({ type: 'follower', id: idx, action: f.interaction_id });
                 let sel = (c === this.menuCursor);
                 let rowClass = "interactive-row" + (sel ? " menu-focus-row" : "");
-                let hpPct = Math.floor((f.hp / f.maxHp) * 100);
-                follH += `<div class="${rowClass}" style="display:flex; justify-content:space-between; padding:2px 4px;" onmouseenter="Game.updateCharacterCursor(${c})">
+                
+                // ADDED: onclick="Game.player.selectOption()" 
+                // This triggers the interaction when clicked, just like pressing Enter.
+                follH += `<div class="${rowClass}" style="display:flex; justify-content:space-between; padding:2px 4px; cursor:pointer;" 
+                               onmouseenter="Game.updateCharacterCursor(${c})" 
+                               onclick="Game.player.selectOption()">
                     <span>${f.name} (Lv.${Math.floor((f.skills.attack+f.skills.defense)/2)})</span>
                     <span style="font-size:11px; color:#aaa;">HP:${Math.ceil(f.hp)}/${f.maxHp}</span>
                 </div>`;
@@ -170,7 +174,7 @@ class CharacterMenu {
             follH = "<div style='color:#666; font-style:italic'>(No companions)</div>";
         }
 
-        // 3. INVENTORY (Unchanged logic, just ensure 'c' increments correctly)
+        // 3. INVENTORY
         if (keys.length > 0) {
             keys.forEach(k => {
                 let i = this.inventory[k], dc = Number.isInteger(i.amount) ? i.amount : i.amount.toFixed(1), ce = (i.is_weapon || i.is_armor_body || i.is_armor_leggings);
@@ -185,7 +189,7 @@ class CharacterMenu {
             invH = "<div style='color:#666; font-style:italic'>(Bag is empty)</div>";
         }
 
-        // 4. STATS & CLOSE (Unchanged)
+        // 4. STATS & CLOSE
         let cs = this.getCombatSkills();
         let raw_skills = this.getRawCombatSkills();
         const fs = (base, total) => { let bo = total - base; return bo > 0 ? `${base}<span style="color:#4f4">+${bo}</span>` : `${base}`; };
@@ -198,7 +202,7 @@ class CharacterMenu {
         this.interactables.push({ type: 'close', id: 'close' });
         let closeSel = (c === this.menuCursor);
         let closeClass = "menu-item interactive-row" + (closeSel ? " menu-focus-row" : "");
-        let closeBtn = `<div class="${closeClass}" style="justify-content:center; margin-top:15px; background:#444; color:#fff; font-weight:bold; text-align:center;" onclick="Game.toggleCharacterMenu()" onmouseenter="Game.updateCharacterCursor(${c})">CLOSE BAG</div>`;
+        let closeBtn = `<div class="${closeClass}" style="justify-content:center; margin-top:15px; background:#444; color:#fff; font-weight:bold; text-align:center; cursor:pointer;" onclick="Game.toggleCharacterMenu()" onmouseenter="Game.updateCharacterCursor(${c})">CLOSE BAG</div>`;
 
         return `<div style="font-family:'Courier New'; line-height:1.4; font-size:13px;">
             <div style="border-bottom:1px solid #555; margin-bottom:10px; padding-bottom:5px; text-align:center;"><strong>CHARACTER MENU</strong></div>
