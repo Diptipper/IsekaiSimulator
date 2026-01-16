@@ -57,7 +57,7 @@ body {
 #game-device {
     width: 100%;
     max-width: 400px;
-    height: 90%;
+    height: 95%;
     max-height: 800px;
     background-color: var(--bg-color);
     display: flex;
