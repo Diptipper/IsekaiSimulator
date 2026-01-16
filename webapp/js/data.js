@@ -1,629 +1,846 @@
-// =============================================================
-// SECTION 1: BASE CONFIGURATION
-// =============================================================
 
 // --- DATA CONTAINERS ---
-const ITEM_DEFINITIONS = {};
-const INTERACTION_REGISTRY = {};
-const GlobalState = { 
+let ITEM_DEFINITIONS = {};
+let FOLLOWER_DEFINITIONS = {};
+let INTERACTION_REGISTRY = {};
+let GLOBAL_STATE = { 
     variables: {}, 
     activeVariable: "" 
 };
-
-// --- SCENE CONTAINERS ---
-const townData = { 
-    "return:return:🔙 Exit town:icon_exit.png": {},
-};
-const woodsData = {
-    "return:return:🔙 Exit the woods:icon_exit.png": {},
-};
-const ruinsData = {
-    "return:return:🔙 Leave Ruins:icon_exit.png": {},
-};
-const quarryData = {
-     "return:return:🔙 Exit mining quarry:icon_exit.png": {},
-};
+function AppendIntRegEntry(key, list) {
+    if (key in INTERACTION_REGISTRY) INTERACTION_REGISTRY[key] = list.concat(INTERACTION_REGISTRY[key]); 
+    else INTERACTION_REGISTRY[key] = list;
+}
 
 
-// =============================================================
-// SECTION 2: SYSTEM MODULES (Core Mechanics)
-// =============================================================
+// ============================================================================================
+// ============================================================================================
+//     Quest template
+// ============================================================================================
+// ============================================================================================
+//
+// :::::: Items :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
-// --- BASE ITEMS & VARIABLES ---
+// :::::: Enemies :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+// :::::: Followers :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+// :::::: Maps ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+// :::::: Dialogues :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+// :::::: Variables :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+// :::::: Interaction Registry ::::::::::::::::::::::::::::::::::::::::::::::::::
+
+
+
+// ============================================================================================
+// ============================================================================================
+//     Starting Quest
+// ============================================================================================
+// ============================================================================================
+//
+//   Drop the player to one of the following locations
+//     1. Castle
+//     2. Town
+//     3. Adventurer guild
+//     4. In the forest
+//
+
+// :::::: Maps ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+let CastleData = {"return:return:🔙 Exit:icon.png": {}}
+let AdvGuildData = {"return:return:🔙 Exit:icon.png": {}}
+let TownData = {
+    "return:return:🔙 Exit:icon.png": {},
+    "scene:castle:🏰 Castle:icon.png; fn_interaction:castle" : CastleData,
+    "scene:adventurer's guild:🧝 Adventurer's guild:icon.png; fn_interaction:adv_guild" : AdvGuildData,
+}
+
+let WoodsData = {"return:return:🔙 Exit:icon.png": {}}
+let OpenWorld = {
+    "scene:town:🏬 Town:icon.png" : TownData,
+    "scene:woods:🌲 Woods:icon.png; fn_interaction:woods" : WoodsData
+};
+let WORLD_MAP = { "scene:open world:Open World:icon.png; fn_interaction:game_intro": OpenWorld};
+
+/* Always create a blank interaction registry */
+AppendIntRegEntry("game_intro", [ { condition: "default", data: {} }, ])
+AppendIntRegEntry("castle",     [ { condition: "default", data: {log_only: "Guard: Begone, pleb!"} }, ])
+AppendIntRegEntry("adv_guild",  [ { condition: "default", data: {} }, ])
+AppendIntRegEntry("woods",      [ { condition: "default", data: {} }, ])
+
+// decide where the starting scene would take place
+const startingScene = "scene:open world:Open World:icon.png; fn_interaction:game_intro"
+
+// :::::: Dialogues :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+const introDlg = {
+    "background": "heaven_clouds.png", "speakers": { "Goddess": ["goddess.png", "(50%,0%)"] },
+    "data": [
+        ["dialogue","Goddess","Dear Hero, yesterday, you died in a car accident in your world.", ["Goddess:fade in"]],
+        ["dialogue","You","Huh? Is this another one of those Isekai bullshit that was popular a decade ago?", ["Scene:shake"]],
+        ["dialogue","Goddess","Yes, yes. Calm down.", ["Goddess:move:(80%,0%)"]],
+        ["dialogue","Goddess","I will let you choose where to start your life in another world.", ["Goddess:move:(20%,0%)"]],
+        ["dialogue","You","Really? Can I get my cheat power too?", ["Goddess:move:(50%,0%)"]],
+        ["dialogue","Goddess","Don't be greedy!", ["Scene:shake","Goddess:shake"]],
+        ["dialogue","Goddess","Now choose!", []],
+        ["question","Goddess","Now choose!", [] ,{
+            "I want to be the brave hero.": "castle",
+            "I want to be dropped in the town.": "in town",
+            "I want to be an adventurer.": "adventurer",
+            "Drop me wherever.": "woods",
+        }],
+        ]
+};
+const intro2Dlg = {
+    "background": "heaven_clouds.png", "speakers": { "Goddess": ["goddess.png", "(50%,0%)"] },
+    "data": [
+        ["dialogue","Goddess","Alright, I will send you down to another world.", ["Goddess:show"]],
+        ["dialogue","Goddess","Have fun there, my hero. And don't cause any trouble.", ["Goddess:fade out"]],
+        ]
+};
+
+// :::::: Variables :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+Object.assign(GLOBAL_STATE.variables, {
+    "introPlayed": false,
+    "starting location": "unknown"
+});
+
+// :::::: Interaction Registry ::::::::::::::::::::::::::::::::::::::::::::::::::
+
+AppendIntRegEntry("game_intro", [
+    { 
+        condition: [
+            { var: "introPlayed", op: "==", val: false }
+        ],
+        data: {
+            dialogue: introDlg,
+            binding: "starting location",
+            on_finish: {
+                check_var: "starting location",
+                switch_case: {
+                    "castle":{
+                        dialogue: intro2Dlg,
+                        actions: [
+                            { type: "set_state", key: "introPlayed", val: true },
+                            { type: "goto", target: "castle" }
+                        ]
+                    },
+                    "in town":{
+                        dialogue: intro2Dlg,
+                        actions: [
+                            { type: "set_state", key: "introPlayed", val: true },
+                            { type: "goto", target: "town" }
+                        ]
+                    },
+                    "adventurer":{
+                        dialogue: intro2Dlg,
+                        actions: [
+                            { type: "set_state", key: "introPlayed", val: true },
+                            { type: "goto", target: "adventurer's guild" }
+                        ]
+                    },
+                    "woods":{
+                        dialogue: intro2Dlg,
+                        actions: [
+                            { type: "set_state", key: "introPlayed", val: true },
+                            { type: "goto", target: "woods" }
+                        ]
+                    },
+                }
+            }
+        }
+    },
+]);
+
+
+
+// ============================================================================================
+// ============================================================================================
+//     Demon Lord Quest
+// ============================================================================================
+// ============================================================================================
+//
+//    1. If the player is summoned, start the quest.
+//    2. The player then go fight the demon king.
+//    3. Come back to the king to get the reward.
+//
+
+// :::::: Items :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
 Object.assign(ITEM_DEFINITIONS, {
-    "Grass": { description: "Common green grass." },
+    "Demon Horn": { description: "Evidence of defeating the Demon King." },
+    "Hero's Medal": { description: "Proof of saving the world." },
+    "Legendary Sword": { is_weapon:true, bonus_skills:new Skills(10,5,2,5) } // High stats needed
+});
+
+// :::::: Enemies :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+const demonGuard = new Enemy("Shadow Knight", 30, { }, new Skills(6, 1, 0, 1));
+const demonKing = new Enemy("Demon King", 100, { "Legendary Sword": 1 }, new Skills(15, 2, 5, 2));
+
+//const demonGuard = new Enemy("Shadow Knight", 10, { }, new Skills(1,0,0,1));
+//const demonKing = new Enemy("Demon King", 10, { "Legendary Sword": 1 }, new Skills(1,0,0,1));
+
+
+// :::::: Maps ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+OpenWorld["scene:Demon king's Castle:😈 Dark Castle:icon.png"] = {
+    "return:return:🔙 Exit:icon.png": {},
+    "dungeon:throne:☠️ Approach Throne:icon.png; fn_interaction:demon_king": [
+        [1000, "Fighting guards...", { "Shadow Knight": [1, demonGuard] }],
+        [1000, "EPIC BATTLE...", { "Demon King": [1, demonKing] }],
+        ["fn_interaction:demon_king_defeated"]
+    ],
+}
+AppendIntRegEntry("demon_king",[ { condition: "default", data: {} }, ])
+
+// :::::: Dialogues :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+// STAGE 1: Initial summoning
+const introCastleDlg = {
+    "background": "royal_chamber.png", 
+    "speakers": { "King": ["king.png", "(50%,0%)"] },
+    "data": [
+        ["dialogue","","...", []],
+        ["dialogue","","*surrounding changes*", ["Scene:shake"]],
+        ["dialogue","","...", []],
+        ["dialogue","King","Huzzah! The summoning ritual was a success!", ["King:fade in"]],
+        ["dialogue","King","Welcome, chosen one. I am the King of this land.", ["King:move:(50%,0%)"]],
+        ["dialogue","King","I will be brief. The Demon King has returned.", ["Scene:shake"]],
+        ["dialogue","King","Our royal knights are... currently on strike. So the fate of the world falls to you.", []],
+        ["dialogue","King","You look ill-equipped. Go visit the Blacksmith in town immediately.", []],
+        ["dialogue","King","He requires raw materials. Go to the Quarry and mine some Copper Ore for him.", []],
+        ["dialogue","King","Once you have a weapon, clear out the spiders infesting the mines!", []],
+        ["dialogue","King","Now begone! I have... important kingly business to attend to.", ["King:fade out"]],
+    ]
+};
+
+// STAGE 2: Meeting the demon king
+const demonKingIntroDlg = {
+    "background": "throne_room_dark.png", 
+    "speakers": { "Demon King": ["demon_lord.png", "(50%,0%)"] },
+    "data": [
+        ["dialogue", "Demon King", "Stop right there.", ["DemonKing:fade in"]],
+        ["dialogue", "Demon King", "You are the fourth 'Chosen Hero' to barge in this week.", []],
+        ["dialogue", "You", "Prepare to die, monster!", ["Scene:shake"]],
+        ["dialogue", "Demon King", "Look, I'm on my lunch break. Can we reschedule?", []],
+        ["dialogue", "You", "No! Draw your weapon!", []],
+        ["dialogue", "Demon King", "*Sigh* Fine. But if I win, you're filling out the paperwork.", []]
+    ]
+};
+
+// STAGE 3: Post fight
+const demonKingDefeatedDlg = {
+    "background": "throne_room_dark.png", 
+    "speakers": { "Demon King": ["demon_lord.png", "(50%,0%)"] },
+    "data": [
+        ["dialogue", "Demon King", "Okay, okay! I yield!", ["DemonKing:shake"]],
+        ["dialogue", "Demon King", "Here, take the horn. I have accumulated vacation days anyway.", []],
+        ["dialogue", "You", "I... have saved the world?", []],
+        ["dialogue", "Demon King", "Sure. Now get out before the janitor arrives.", ["DemonKing:fade out"]]
+    ]
+};
+
+// STAGE 4: Finishing the quest
+const kingRewardDlg = {
+    "background": "royal_chamber.png", 
+    "speakers": { "King": ["king.png", "(50%,0%)"] },
+    "data": [
+        ["dialogue", "King", "By the gods! Is that the Demon King's horn?", ["king:fade in"]],
+        ["dialogue", "King", "You have actually done it!", ["Scene:shake"]],
+        ["dialogue", "King", "Take this medal. You are a true legend.", []]
+    ]
+};
+
+
+// :::::: Variables :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+Object.assign(GLOBAL_STATE.variables, {
+    "castleIntroPlayed": false,
+    "demonkingIntroPlayed": false,
+    "demonKingDefeated": false,
+    "demonKingQstCompleted": false,
+});
+
+// :::::: Interaction Registry ::::::::::::::::::::::::::::::::::::::::::::::::::
+
+AppendIntRegEntry("castle", [
+    {
+        comment: "This one is about the quest before it's finished",
+        condition: { var: "starting location", op: "==", val: "castle" },
+        data: {
+            on_finish: {
+                check_var: "castleIntroPlayed",
+                if_false:{
+                    actions: [
+                        { type: "interaction", id: "castle_summoned"}, //Play the initial summoning scene
+                    ]
+                },
+                if_true:{
+                    actions: [
+                        { type: "log", text: "King: Why are you still here? Go to the quarry, get ore, and kill the Demon King!" }
+                    ]
+                }
+            }
+        }
+    },
+]);
+
+// STAGE 1: Initial summoning
+AppendIntRegEntry("castle_summoned", [
+    {
+        comment: "This is when the player is summoned for the first time",
+        condition: "default",
+        data: {
+            dialogue: introCastleDlg,
+            on_finish: {
+                actions: [
+                    { type: "set_state", key: "castleIntroPlayed", val: true },
+                    { type: "log", text: "Quest started: Defeat the Demon King." }
+                ]
+            }
+        }
+    },
+]);
+
+// STAGE 2: Meeting the demon king
+AppendIntRegEntry("demon_king", [
+    {
+        condition: [
+            { var: "starting location", op: "==", val: "castle" },
+            { var: "demonkingIntroPlayed", op: "==", val: false },
+        ],
+        data: {
+            dialogue: demonKingIntroDlg,
+            on_finish: {
+                actions: [
+                    { type: "set_state", key: "demonkingIntroPlayed", val: true },
+                ]
+            }
+        }
+    },
+]);
+
+// STAGE 3: Post fight
+AppendIntRegEntry("demon_king_defeated", [
+    {
+        condition: "default",
+        data: {
+            dialogue: demonKingDefeatedDlg,
+            on_finish: {
+                actions: [
+                    { type: "reward", item: "Demon Horn", count: 1 },
+                    { type: "log", text: "You obtained the Demon Horn!" },
+                ]
+            }
+        }
+    }
+]);
+
+// STAGE 4: Finishing the quest
+AppendIntRegEntry("castle", [
+    {
+        comment: "This is when the demon king quest is completed",
+        condition: { var: "demonKingQstCompleted", op: "==", val: true },
+        data: { 
+            log_only: "King: The bards will sing of your name! Now let me rest." 
+        }
+    },
+    {
+        comment: "This is when the demon king is defeated",
+        condition: [
+            { var: "starting location", op: "==", val: "castle" },
+            { var: "demonKingQstCompleted", op: "==", val: false },
+            { type: "item", id: "Demon Horn", op: ">=", val: 1 },
+        ],
+        data: {
+            dialogue: kingRewardDlg,
+            on_finish: {
+                actions: [
+                    { type: "consume", item: "Demon Horn", count: 1 },
+                    { type: "reward", item: "Hero's Medal", count: 1 },
+                    { type: "set_state", key: "demonKingQstCompleted", val: true },
+                    { type: "log", text: "MAIN QUEST COMPLETE" }
+                ]
+            }
+        }
+    },
+]);
+
+// ============================================================================================
+// ============================================================================================
+//     Follower test
+// ============================================================================================
+// ============================================================================================
+//
+//
+
+// :::::: Items :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+Object.assign(ITEM_DEFINITIONS, {
+    "Goblin Ear": { description: "Gross, but mercenaries collect them." },
+    "Wild Flower": { description: "A pretty flower found in the woods." },
+    "Potion": { bonus_hp: 20, amount: 0, is_weapon: false } // Bonus item
+});
+
+// :::::: Enemies :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+const goblinEnemy = new Enemy("Goblin Scout", 15, {"Goblin Ear": 0.8, "Potion": 0.2}, new Skills(4, 1, 0, 1));
+const wolfEnemy = new Enemy("Dire Wolf", 25, {"Wild Flower": 0.5}, new Skills(6, 2, 0, 2));
+
+//const goblinEnemy = new Enemy("Goblin Scout", 10, {"Goblin Ear": 1, "Potion": 1}, new Skills(1, 0, 0, 1));
+//const wolfEnemy = new Enemy("Dire Wolf", 10, {"Wild Flower": 1}, new Skills(1, 0, 0, 1));
+
+// :::::: Followers :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+Object.assign(FOLLOWER_DEFINITIONS, {
+    "Rookie Healer": { 
+        hp: 20, 
+        skills: new Skills(2, 2, 8, 2), // High healing
+        interaction: "follower_healer_talk" 
+    },
+    "Veteran Merc": { 
+        hp: 50, 
+        skills: new Skills(12, 6, 0, 4), // High attack
+        interaction: "follower_merc_talk" 
+    }
+});
+
+// :::::: Maps ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+let TavernData = {
+    "return:return:🔙 Leave:icon.png": {},
+    "scene:recruit_merc:🍺 Approach Mercenary:icon.png; fn_interaction:recruit_merc": null,
+    "scene:recruit_healer:🌿 Approach Healer:icon.png; fn_interaction:recruit_healer": null
+};
+
+Object.assign(WoodsData, {
+    "fight:fight:⚔️ Hunt Monsters:icon.png" : [1000, "Hunting in the woods...", { 
+        "Goblin": [0.6, goblinEnemy], 
+        "Wolf": [0.4, wolfEnemy] 
+    }]
+});
+
+Object.assign(TownData, {
+    "scene:tavern:🍺 The Rusty Sword Tavern:icon.png; fn_interaction:tavern": TavernData
+});
+AppendIntRegEntry("tavern",[ { condition: "default", data: {} }, ])
+
+// :::::: Dialogues :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+const mercIntroDlg = {
+    "background": "tavern_inside.png",
+    "speakers": { "Mercenary": ["knight.png", "(50%,0%)"] },
+    "data": [
+        ["dialogue", "Mercenary", "You look like a rookie. You need muscle?", ["Mercenary:show"]],
+        ["dialogue", "Mercenary", "I don't work for free. Bring me 3 Goblin Ears as a down payment.", []],
+        ["dialogue", "You", "Gross. But fine.", []]
+    ]
+};
+
+const mercJoinDlg = {
+    "background": "tavern_inside.png",
+    "speakers": { "Mercenary": ["knight.png", "(50%,0%)"] },
+    "data": [
+        ["dialogue", "Mercenary", "Hah! You actually touched those things?", ["Mercenary:shake"]],
+        ["dialogue", "Mercenary", "Alright, a deal is a deal. I've got your back.", []]
+    ]
+};
+
+const healerIntroDlg = {
+    "background": "tavern_inside.png",
+    "speakers": { "Healer": ["goddess.png", "(50%,0%)"] }, // Reusing goddess sprite as placeholder
+    "data": [
+        ["dialogue", "Healer", "Oh, hello. Are you an adventurer?", ["Healer:show"]],
+        ["dialogue", "Healer", "I wish to see the world, but I am too frail.", []],
+        ["dialogue", "Healer", "If you can bring me 3 Wild Flowers from the woods, I will trust your gentle soul.", []]
+    ]
+};
+
+const healerJoinDlg = {
+    "background": "tavern_inside.png",
+    "speakers": { "Healer": ["goddess.png", "(50%,0%)"] },
+    "data": [
+        ["dialogue", "Healer", "They are beautiful...", ["Healer:move:(50%,10%)"]],
+        ["dialogue", "Healer", "Thank you. I will use my magic to protect you.", []]
+    ]
+};
+
+// :::::: Variables :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+// :::::: Interaction Registry ::::::::::::::::::::::::::::::::::::::::::::::::::
+
+AppendIntRegEntry("recruit_merc", [
+    // Case 1: Already recruited
+    { 
+        condition: { var: "merc_recruited", op: "==", val: true },
+        data: { log_only: "Mercenary: Let's go hit something already." }
+    },
+    // Case 2: Have the items -> Recruit
+    {
+        condition: { type: "item", id: "Goblin Ear", op: ">=", val: 3 },
+        data: {
+            dialogue: mercJoinDlg,
+            on_finish: {
+                actions: [
+                    { type: "consume", item: "Goblin Ear", count: 3 },
+                    { type: "reward", item: "Veteran Merc", count: 1 },
+                    { type: "set_state", key: "merc_recruited", val: true },
+                ]
+            }
+        }
+    },
+    // Case 3: Default -> Intro
+    {
+        condition: "default",
+        data: {
+            dialogue: mercIntroDlg
+        }
+    }
+]);
+
+AppendIntRegEntry("recruit_healer", [
+    { 
+        condition: { var: "healer_recruited", op: "==", val: true },
+        data: { log_only: "Healer: I am ready when you are." }
+    },
+    {
+        condition: { type: "item", id: "Wild Flower", op: ">=", val: 3 },
+        data: {
+            dialogue: healerJoinDlg,
+            on_finish: {
+                actions: [
+                    { type: "consume", item: "Wild Flower", count: 3 },
+                    { type: "reward", item: "Rookie Healer", count: 1 },
+                    { type: "set_state", key: "healer_recruited", val: true },
+                ]
+            }
+        }
+    },
+    {
+        condition: "default",
+        data: { dialogue: healerIntroDlg }
+    }
+]);
+
+// 2. FOLLOWER MENU INTERACTIONS (When clicked in the character menu)
+
+AppendIntRegEntry("follower_merc_talk", [
+    { condition: "default", data: { log_only: "Merc: Sharpening my blade. Don't worry about it." } }
+]);
+
+AppendIntRegEntry("follower_healer_talk", [
+    { 
+        condition: "default", 
+        data: { 
+            // Simple logic: If player is hurt, log a heal message (visual only for now)
+            // or just generic flavor text.
+            log_only: "Healer: Stay close, I'll keep your health up in battle." 
+        } 
+    }
+]);
+
+
+
+// ============================================================================================
+// ============================================================================================
+//     GUILDMASTER'S DAUGHTER QUEST
+// ============================================================================================
+// ============================================================================================
+//
+// :::::: Items :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+// :::::: Enemies :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+const forestTroll = new Enemy("Forest Troll", 30, { "Gold Coin": 5 }, new Skills(8, 2, 2, 1));
+//const forestTroll = new Enemy("Forest Troll", 10, { "Gold Coin": 5 }, new Skills(1,0,0,1));
+
+Object.assign(FOLLOWER_DEFINITIONS, {
+    "Elara": { 
+        hp: 45, 
+        skills: new Skills(10, 3, 2, 8), // High Agility & Attack (Rogue type)
+        interaction: "follower_elara_talk" 
+    }
+});
+
+// :::::: Maps ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+Object.assign(AdvGuildData, {
+    "scene:gm:📜 Guildmaster:icon.png; fn_interaction:gm_interaction": null,
+});
+
+// :::::: Dialogues :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+// --- Guildmaster Dialogues ---
+const gmStartQuestDlg = {
+    "background": "guild_hall.png",
+    "speakers": { "Guildmaster": ["king.png", "(50%,0%)"] }, // Placeholder sprite
+    "data": [
+        ["dialogue", "Guildmaster", "Adventurer! I have a personal request.", ["Guildmaster:show"]],
+        ["dialogue", "Guildmaster", "My daughter, Elara, went into the woods to prove herself.", []],
+        ["dialogue", "Guildmaster", "She hasn't returned. Please, find her before something happens.", []],
+        ["dialogue", "You", "Consider it done.", []]
+    ]
+};
+
+const gmFinishQuestDlg = {
+    "background": "guild_hall.png",
+    "speakers": { "Guildmaster": ["king.png", "(50%,0%)"] },
+    "data": [
+        ["dialogue", "Guildmaster", "Elara returned! She told me you saved her life.", ["Guildmaster:show"]],
+        ["dialogue", "Guildmaster", "She insists on joining your party. I suppose I can't stop her.", []],
+        ["dialogue", "Guildmaster", "Take this gold as thanks.", []]
+    ]
+};
+
+// --- Woods Event Dialogues ---
+const elaraEncounterDlg = {
+    "background": "forest_clearing.png",
+    "speakers": { "Girl": ["goddess.png", "(70%,0%)"], "Troll": ["demon_lord.png", "(30%,0%)"] }, // Placeholders
+    "data": [
+        ["dialogue", "Girl", "Get back, you ugly brute!", ["Girl:show", "Troll:show"]],
+        ["dialogue", "Troll", "GRAAAH!", ["Troll:shake"]],
+        ["dialogue", "You", "That must be her! I have to help!", ["Scene:shake"]],
+        ["dialogue", "Girl", "Who are you? Help me take it down!", []]
+    ]
+};
+
+const elaraSuccessDlg = {
+    "background": "forest_clearing.png",
+    "speakers": { "Elara": ["goddess.png", "(50%,0%)"] },
+    "data": [
+        ["dialogue", "Elara", "*Pants*... That was close.", ["Elara:show"]],
+        ["dialogue", "Elara", "You're from the guild, right? My father sent you?", []],
+        ["dialogue", "Elara", "I can't go back empty-handed. Let me join you.", []],
+        ["dialogue", "Elara", "I promise I'm better with a dagger than I looked back there.", []]
+    ]
+};
+
+// :::::: Variables :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+Object.assign(GLOBAL_STATE.variables, {
+    "quest_gm_daughter_active": false, // Has the GM given the quest?
+    "quest_gm_daughter_won": null,     // Result of the fight (null = not fought, true = won, false = lost)
+    "quest_gm_daughter_saved": false,  // Has she been recruited?
+    "quest_gm_daughter_done": false    // Quest turned in?
+});
+
+// :::::: Interaction Registry ::::::::::::::::::::::::::::::::::::::::::::::::::
+
+// 1. GUILDMASTER INTERACTION
+AppendIntRegEntry("gm_interaction", [
+    // Case A: Quest Complete (Turn In)
+    {
+        condition: [
+            { var: "quest_gm_daughter_saved", op: "==", val: true },
+            { var: "quest_gm_daughter_done", op: "==", val: false }
+        ],
+        data: {
+            dialogue: gmFinishQuestDlg,
+            on_finish: {
+                actions: [
+                    { type: "reward", item: "Gold Coin", count: 50 },
+                    { type: "set_state", key: "quest_gm_daughter_done", val: true },
+                    { type: "log", text: "Quest Complete: Daughter Saved!" }
+                ]
+            }
+        }
+    },
+    // Case B: Quest Already Done
+    {
+        condition: { var: "quest_gm_daughter_done", op: "==", val: true },
+        data: { log_only: "Guildmaster: Take care of Elara for me." }
+    },
+    // Case C: Quest In Progress (Waiting)
+    {
+        condition: { var: "quest_gm_daughter_active", op: "==", val: true },
+        data: { log_only: "Guildmaster: Please, check the Woods!" }
+    },
+    // Case D: Give Quest (Default)
+    {
+        condition: "default",
+        data: {
+            dialogue: gmStartQuestDlg,
+            on_finish: {
+                actions: [
+                    { type: "set_state", key: "quest_gm_daughter_active", val: true },
+                    { type: "log", text: "Quest Started: Find Elara in the Woods." }
+                ]
+            }
+        }
+    }
+]);
+
+// 2. WOODS INTERACTION (Auto-triggered when entering Woods)
+// We are appending to the existing "woods" key defined in your base data.js
+AppendIntRegEntry("woods", [
+    
+
+    // --- STEP 1: ENCOUNTER TRIGGER ---
+    // If quest is active, we haven't recruited her, and we haven't won yet (or we lost previously)
+    {
+        condition: [
+            { var: "quest_gm_daughter_active", op: "==", val: true },
+            { var: "quest_gm_daughter_saved", op: "==", val: false }
+        ],
+        data: {
+            dialogue: elaraEncounterDlg,
+            on_finish: {
+                actions: [
+                    { 
+                        type: "fight", 
+                        text: "Protect Elara!", 
+                        enemy: { "Forest Troll": [1.0, forestTroll] },
+                        binding: "quest_gm_daughter_won", // Binds result (true/false) to this var
+                        next: "elara_resolution"
+                    },
+                ]
+            }
+        }
+    }
+]);
+
+AppendIntRegEntry("elara_resolution", [
+    {
+        condition: [
+            { var: "quest_gm_daughter_active", op: "==", val: true },
+            { var: "quest_gm_daughter_saved", op: "==", val: false },
+            { var: "quest_gm_daughter_won", op: "==", val: true }
+        ],
+        data: {
+            dialogue: elaraSuccessDlg,
+            on_finish: {
+                actions: [
+                    { type: "reward", item: "Elara", count: 1 },
+                    { type: "set_state", key: "quest_gm_daughter_saved", val: true },
+                    { type: "log", text: "Elara joined the party! Return to Guildmaster." }
+                ]
+            }
+        }
+    },
+    {
+        condition: "default",
+        data: {}
+    },
+
+]);
+
+// 3. ELARA MENU INTERACTION
+AppendIntRegEntry("follower_elara_talk", [
+    { condition: "default", data: { log_only: "Elara: Thanks for helping me back there." } }
+]);
+
+// ============================================================================================
+//      ELARA ROMANCE EVENT (TAVERN VERSION)
+// ============================================================================================
+
+// 1. Define Variables
+Object.assign(GLOBAL_STATE.variables, {
+    "elara_romance_talk_done": false,
+    "elara_night_pending": false
+});
+
+// 2. Define the Dialogue (Modified for Inn setting)
+const elaraRomanceTeaseDlg = {
+    // UPDATED: Background matches the Inn/Tavern
+    "background": "tavern_inside.png", 
+    "speakers": { "Elara": ["goddess.png", "(50%,0%)"] }, 
+    "data": [
+        ["dialogue", "Elara", "It's noisy down here, isn't it?", ["Elara:show"]],
+        ["dialogue", "You", "A bit. Do you want to leave?", []],
+        ["dialogue", "Elara", "No... actually...", ["Elara:move:(60%,0%)"]],
+        ["dialogue", "Elara", "I rented a room upstairs. It's much quieter.", []],
+        ["dialogue", "Elara", "I've been thinking about you since our last fight.", ["Scene:shake"]],
+        ["dialogue", "Elara", "Come with me?", ["Elara:move:(40%,0%)"]],
+        ["dialogue", "You", "Lead the way.", []],
+        // "Fade to black" / Time passing implication
+        ["dialogue", "", "You follow Elara upstairs...", ["Elara:fade out", "Scene:fade out"]],
+        ["dialogue", "", "...", []], 
+        ["dialogue", "", "Some time later...", []],
+        ["dialogue", "Elara", "That was... exactly what I needed.", ["Elara:show", "Scene:fade in"]]
+    ]
+};
+
+// 3. Register the Interaction
+AppendIntRegEntry("tavern", [
+    {
+        condition: [
+            // 1. Must have saved her
+            { type: "follower", id: "Elara", in_party: true },
+            // 2. Must not have happened yet
+            { var: "elara_romance_talk_done", op: "==", val: false },
+            // 3. 50% Chance
+            { var: "rand:uniform", op: "<", val: 1.0 }
+        ],
+        data: {
+            dialogue: elaraRomanceTeaseDlg,
+            on_finish: {
+                actions: [
+                    // Mark as done
+                    { type: "set_state", key: "elara_romance_talk_done", val: true },
+                    // Set flag for future events
+                    { type: "set_state", key: "elara_night_pending", val: true },
+                    // Optional: Heal player to imply rest
+                    { type: "set_state", key: "player_hp", val: 100 }, 
+                    { type: "log", text: "You feel refreshed." }
+                ]
+            }
+        }
+    }
+]);
+
+
+// ============================================================================================
+// ============================================================================================
+//     Woods, ores, and smelting template
+// ============================================================================================
+// ============================================================================================
+//
+// :::::: Items :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+Object.assign(ITEM_DEFINITIONS, {
     "Oak log": { description: "Sturdy wood." },
     "Branch": { description: "A small stick." },
     "Copper ore": { description: "Unrefined copper." },
     "Copper ingot": { description: "Smelted metal." },
     "Copper dagger": { is_weapon:true, bonus_skills:new Skills(2,0,0,1) },
+    "Copper plate armor": { is_armor_body:true, bonus_hp:1, bonus_skills:new Skills(0,2,0,0) },
+    "Copper plate leggings": { is_armor_leggings:true, bonus_hp:1, bonus_skills:new Skills(0,2,0,0) },
     "Garnet": { description: "A red gem." }
 });
 
-Object.assign(GlobalState.variables, {
-    "introPlayed": false,
-    "combatIntroPlayed": false,
-    "woods_visited": false,
+// :::::: Enemies :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+// :::::: Followers :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+// :::::: Maps ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+Object.assign(AdvGuildData, {
+    "scene:gm:📜 Guildmaster:icon.png; fn_interaction:gm_interaction": null,
 });
 
-// --- MODULE: INTRO SCENE ---
-const introData = {
-    "background": "heaven_clouds.png", "speakers": { "Goddess": ["goddess.png", "(50%,0%)"] },
-    "data": [
-        ["dialogue","Goddess","Dear Hero, yesterday, you died in a car accident in your world.", ["Goddess:fade in"]],
-        ["dialogue","You","Huh? Is this another one of those Isekai bullshit that was popular a decade ago?", ["Scene:shake"]],
-        ["dialogue","Goddess","Yes, yes. Calm down. You already know the drill.", ["Goddess:move:(80%,0%)"]],
-        ["dialogue","Goddess","Alright, I will send you down to another world.", ["Goddess:move:(20%,0%)"]],
-        ["dialogue","Goddess","Oh. I almost forget. You can press C, or click the button on the top-right of the screen, to see your stats and equipments.", ["Goddess:move:(50%,0%)"]],
-        ["dialogue","Goddess","Have fun there, my hero. And don't cause any trouble.", ["Goddess:fade out"]],
-    ]
-};
-
-INTERACTION_REGISTRY["intro_logic"] = [
-    {
-        condition: { var: "introPlayed", op: "==", val: true },
-        data: {}
+Object.assign(OpenWorld, {
+    "scene:forest clearing:🪵 Forest clearing:icon.png": {
+        "return:return:🔙 Exit:icon.png": {},
+        "harvest:cut trees:🪓 Cut tree:icon.png":
+        [1000, "Chopping wood...", { "Oak log": 1.0, "Branch": 0.5 }],
     },
-    { 
-        condition: "default",
-        data: {
-            dialogue: introData,
-            on_finish: {
-                actions: [
-                    { type: "set_state", key: "introPlayed", val: true },
-                    { type: "goto", target: "town" }
-                ]
-            }
-        }
-    }
-];
+    "scene:mining quarry:🪨 Mining quarry:quarry_dark.png": {
+        "return:return:🔙 Exit:icon.png": {},
+        "harvest:mine ores:⛏️ Mine ores:icon_pickaxe.png" :
+        [1000, "Mining rocks...", { "Copper ore": 1.0, "Garnet": 0.5 }],
 
-// --- MODULE: COMBAT TUTORIAL ---
-const introCombatData = {
-    "background": "heaven_clouds.png", "speakers": { "Goddess": ["goddess.png", "(50%,0%)"] },
-    "data": [
-        ["dialogue","Goddess","During the combat, the attacker rolls the dice.", ["Goddess:fade in"]],
-        ["dialogue","Goddess","If the number is greater than probability governed by the attacker's Luck stat, the attack is landed.", ["Goddess:move:(50%,0%)"]],
-        ["dialogue","Goddess","The damage is given by the attacker's Attack subtracted by the receiver's Defense.", []],
-        ["dialogue","Goddess","Good luck, Hero.", ["Goddess:fade out"]],
-    ]
-};
-
-INTERACTION_REGISTRY["combat_tutorial"] = [
-    {
-        condition: { var: "combatIntroPlayed", op: "==", val: true },
-        data: {}
     },
-    {
-        condition: "default",
-        data: {
-            dialogue: introCombatData,
-            on_finish: {
-                actions: [
-                    { type: "set_state", key: "combatIntroPlayed", val: true },
-                    { type: "log", text: "Tutorial Complete." }
-                ]
-            }
-        }
-    }
-];
-
-// --- MODULE: WOODS ATMOSPHERE ---
-INTERACTION_REGISTRY["woods_intro"] = [
-    {
-        condition: { var: "woods_visited", op: "==", val: true }, data: {}
-    },
-    {
-        condition: "default",
-        data: { 
-            dialogue: {
-                background: "woods.png",
-                speakers: { "You": ["hero_scared.png", "(50%,0%)"] },
-                data: [
-                    ["dialogue", "You", "It's... unnaturally quiet here.", ["You:shake"]],
-                    ["dialogue", "You", "I should keep my weapon ready.", []]
-                ]
-            },
-            on_finish: {
-                actions: [
-                    { type: "set_state", key: "woods_visited", val: true }
-                ]
-            }
-        }
-    }
-];
-
-
-// =============================================================
-// SECTION 3: CONTENT MODULES (Quests & Shops)
-// =============================================================
-
-// -------------------------------------------------------------
-// MODULE: THE BLACKSMITH (Crafting Shop)
-// -------------------------------------------------------------
-townData["scene:blacksmith:➡️ To Blacksmith:icon_anvil.png"] = {
-    "return:return:🔙 Exit shop:icon_exit.png": {},
-    "craft:smelt ore:🔨 Smelt ore:icon_anvil.png": [1000, "Smelting ores...", { "input:Oak log": 0.5, "input:Copper ore": 1, "output:Copper ingot": 1 }],
-    "craft:craft dagger:🔨 Copper dagger:icon_hammer.png": [1000, "Crafting...", { "input:Copper ingot": 1, "output:Copper dagger": 1 }],
-};
-
-// -------------------------------------------------------------
-// MODULE: THE GATE GUARD
-// -------------------------------------------------------------
-Object.assign(GlobalState.variables, { "metGuard": false, "player status": "unknown" });
-
-const guardData = {
-    "background": "town_gate_bg.png",
-    "speakers": {
-        "Guard1": ["guard1.png", "(10%,0%)"],
-        "Guard2": ["guard2.png", "(90%,0%)"]
-    },
-    "data": [
-        ["dialogue","Guard1","Halt!", ["Guard1:fade in"]],
-        ["dialogue","Guard2","Who goes there?", ["Guard2:fade in"]],
-        ["question","Guard1","State your business.", ["Guard1:move:(15%,0%)","Guard2:move:(85%,0%)"] ,{
-            "I am an adventurer": "adventurer",
-            "Just passing through": "passerby"
-        }],
-        ["dialogue","Guard1","Alright! you may enter.", ["Guard1:change_sprite:guard1_happy.png", "Guard1:shake", "Guard2:shake"]]
-    ]
-};
-const guardDataPassed = {
-    "background": "town_gate_bg.png",
-    "speakers": {
-        "Guard1": ["guard1.png", "(10%,0%)"],
-        "Guard2": ["guard2.png", "(90%,0%)"]
-    },
-    "data": [
-        ["dialogue","Guard1","Halt!", ["Guard1:fade in"]],
-        ["dialogue","Guard2","Who goes there?", ["Guard2:fade in"]],
-        ["dialogue","Guard2","Oh, it's that {player status}.", ["Guard1:move:(15%,0%)","Guard2:move:(85%,0%)"]],
-        ["dialogue","Guard1","Alright, you may enter.", ["Guard1:move:(10%,0%)","Guard2:move:(90%,0%)"]]
-    ]
-};
-
-INTERACTION_REGISTRY["guard_logic"] = [
-    {
-        condition: {var: "metGuard", op: "==", val: true },
-        data: {
-            dialogue: guardDataPassed
-        }
-    },
-    {
-        condition: "default",
-        data: {
-            dialogue: guardData,
-            binding: "player status",
-            on_finish: {
-                actions: [
-                    { type: "set_state", key: "metGuard", val: true },
-                    { type: "log", text: "Guard lets you pass." }
-                ]
-            }
-        }
-    }
-];
-
-townData["scene:guard chat:💬 Talk to Guard:icon_shield.png; fn_interaction:guard_logic"] = null;
-
-
-// -------------------------------------------------------------
-// MODULE: QUEST - RESCUE ELARA
-// -------------------------------------------------------------
-Object.assign(ITEM_DEFINITIONS, {
-    "Rose Rapier": { is_weapon:true, bonus_skills:new Skills(5,1,0,3) },
-    "Silk Dress": { is_armor_body:true, bonus_hp:2, bonus_skills:new Skills(0,0,5,2) },
-    "Leather vest": { is_armor_body:true, bonus_hp:5, bonus_skills:new Skills(0,2,0,0) },
-    "Diamond key": { description: "Unlocks the boss door." }
 });
 
-const roseThorn = new Enemy("Thorn Spirit", 15, { "Rose petal": 1 }, new Skills(5,1,1,2));
-const stoneGolem = new Enemy("Ruin Golem", 20, { "Stone chip": 2 }, new Skills(6,3,0,1));
-const ruinBoss = new Enemy("Crimson Keeper", 30, { "Rose Rapier": 1, "Diamond key": 1 }, new Skills(8,5,2,1));
-
-Object.assign(GlobalState.variables, { "quest_elara": "not_started", "elara quest accept": false, "elara feeling": "scared" });
-
-const mayorStartData = {
-    "background": "town_square.png",
-    "speakers": {
-        "Mayor": ["mayor.png", "(50%,0%)"]
-    },
-    "data": [
-        ["dialogue","Mayor","Adventurer! Please, you must help me!", ["Mayor:fade in", "Mayor:shake"]],
-        ["dialogue","Mayor","My daughter, Elara, went to the Whispering Ruins to pick flowers and hasn't returned.", []],
-        ["question","Mayor","Will you save her?", [] ,{
-            "I will bring her back": true,
-            "Sounds dangerous...": false
-        }]
-    ]
-};
-const mayorStartAcceptData = {
-    "background": "town_square.png",
-    "speakers": { "Mayor": ["mayor.png", "(50%,0%)"] },
-    "data": [
-        ["dialogue","Mayor","Oh, thank you! The Ruins are to the East. Please hurry!", ["Mayor:shake"]]
-    ]
-};
-const mayorStartRejectData = {
-    "background": "town_square.png",
-    "speakers": { "Mayor": ["mayor.png", "(50%,0%)"] },
-    "data": [
-        ["dialogue","Mayor","My god! If you change your mind, please come see me again!", ["Mayor:shake"]]
-    ]
-};
-const mayorEndData = {
-    "background": "town_square.png",
-    "speakers": { "Mayor": ["mayor.png", "(50%,0%)"] },
-    "data": [
-        ["dialogue","Mayor","You returned!", ["Mayor:fade in"]],
-        ["dialogue","Mayor","But... where is Elara?", ["Mayor:shake"]],
-        ["dialogue","You","She is safe. She just needs a moment.", []],
-        ["dialogue","Mayor","Thank the gods! Here, take this gold as a reward.", []]
-    ]
-};
-
-const elaraRescueData = { "background": "ruins_garden.png",
-    "speakers": { "Elara": ["elara.png", "(50%,0%)"] },
-    "data": [
-        ["dialogue","Elara","...Is it dead? Is the monster gone?",["Elara:fade in", "Elara:shake"]],
-        ["dialogue","You","It's over. You're safe now.", []],
-        ["dialogue","Elara","My hero... I thought I would never see the sky again.",["Elara:move:(50%,0%)"]],
-        ["question","Elara","Why... why did you come for me?", [] ,{
-            "The Mayor sent me": "it was merely duty",
-            "I couldn't let such beauty fade": "your heart led you here" }
-        ],
-        ["dialogue","Elara","I see... {elara feeling}.", ["Elara:shake"]],
-        ["dialogue","Elara","Let's go home. I will never forget this.", ["Elara:fade out"]]
-    ]
-};
-
-INTERACTION_REGISTRY["mayor_logic"] = [
-    {
-        condition: { var: "quest_elara", op: "==", val: "saved" },
-        data: {
-            dialogue: mayorEndData,
-            on_finish: {
-                actions: [
-                    { type: "set_state", key: "quest_elara", val: "completed" },
-                    { type: "reward", item: "Gold", count: 100 },
-                    { type: "log", text: "Quest Complete! +100 Gold" }
-                ]
-            }
-        }
-    },
-    {
-        condition: { var: "quest_elara", op: "==", val: "completed" },
-        data: {
-            dialogue: {
-                speakers:{"Mayor":["mayor.png","(50%,0%)"]},
-                background:"town_square.png",
-                data:[
-                    ["dialogue","Mayor","Thank you forever!",["Mayor:fade in"]]
-                ]
-            }
-        }
-    },
-    {
-        condition: { var: "quest_elara", op: "==", val: "started" },
-        data: {
-            dialogue: mayorStartAcceptData
-        }
-    },
-    {
-        condition: "default",
-        data: {
-            dialogue: mayorStartData,
-            binding: "elara quest accept",
-            on_finish: {
-                check_var: "elara quest accept",
-                if_true: {
-                    dialogue: mayorStartAcceptData,
-                    actions: [
-                        { type: "set_state", key: "quest_elara", val: "started" },
-                        { type: "log", text: "Quest Started: Rescue Elara!" }
-                    ]
-                },
-                if_false: {
-                    dialogue: mayorStartRejectData
-                }
-            }
-        }
-    }
-];
-
-INTERACTION_REGISTRY["elara_logic"] = [
-    {
-        condition: [
-            { var: "quest_elara", op: "==", val: "started" },
-            { type: "item", id: "Diamond key", op: ">=", val: 1 }
-        ],
-        data: {
-            dialogue: elaraRescueData,
-            binding: "elara feeling",
-            on_finish: {
-                check_var: "elara feeling",
-                if_value: {
-                    "your heart led you here": {
-                        actions: [
-                            { type: "reward", item: "Silk Dress", count: 1 },
-                            { type: "log", text: "Romance triggered! Received Silk Dress." }
-                        ]
-                    },
-                    "default": {
-                        actions: [
-                            { type: "log", text: "Elara respects your professionalism." }
-                        ]
-                    }
-                },
-                actions: [
-                    { type: "set_state", key: "quest_elara", val: "saved" }
-                ]
-            }
-        }
-    },
-    {
-        condition: { var: "quest_elara", op: "==", val: "started" },
-        data: {
-            log_only: "You need a key to unlock this door..." }
-        },
-    {
-        condition: { var: "quest_elara", op: "in", val: ["saved", "completed"] },
-        data: {
-            log_only: "It's empty..." }
-        },
-    {
-        condition: "default",
-        data: {
-            log_only: "Nothing to see here..."
-        }
-    }
-];
-
-townData["scene:mayor:💬 Mayor's House:icon_house.png; fn_interaction:mayor_logic"] = null;
-ruinsData["dungeon:ruins dungeon:⚔️ Enter Ruins:icon_skull.png; fn_interaction:combat_tutorial"] = [
-    [1000, "Fending off thorns...", { "Thorn Spirit": [1, roseThorn] }],
-    [1500, "Crushing rocks...", { "Ruin Golem": [1, stoneGolem] }],
-    [2000, "BOSS BATTLE...", { "Crimson Keeper": [1, ruinBoss] }]
-];
-ruinsData["scene:elara:🚪 Locked door:icon_heart.png; fn_interaction:elara_logic"] = null;
-
-
-// -------------------------------------------------------------
-// MODULE: QUEST - THE MERCHANT
-// -------------------------------------------------------------
-Object.assign(ITEM_DEFINITIONS, { "Emerald root": { description: "Rare herb." }, "Leather pants": { is_armor_leggings:true, bonus_hp:2, bonus_skills:new Skills(0,1,0,1) } });
-Object.assign(GlobalState.variables, { "quest_merchant": "not_started", "merchant quest accept": false });
-
-const merchantStartData = {
-    "background": "town_square.png",
-    "speakers": {
-        "Merchant": ["merchant.png", "(50%,0%)"]
-    },
-    "data": [
-        ["dialogue","Merchant","Hello there! I'm running low on supplies.", ["Merchant:fade in"]],
-        ["question","Merchant","Could you go to the woods and find me 3 Emerald roots?", [] ,{
-            "Sure thing": true,
-            "Not now": false
-        }]
-    ]
-};
-const merchantEndData = {
-    "background": "town_square.png",
-    "speakers": {
-        "Merchant": ["merchant.png", "(50%,0%)"]
-    },
-    "data": [
-        ["dialogue","Merchant","Ah! You found them!", ["Merchant:fade in", "Merchant:shake"]],
-        ["dialogue","Merchant","These are perfect. Here, take these pants I ... uh ... found.", []]
-    ]
-};
-const merchantWaitData = {
-    "background": "town_square.png",
-    "speakers": {
-        "Merchant": ["merchant.png", "(50%,0%)"]
-    },
-    "data": [
-        ["dialogue","Merchant","I need 3 Emerald roots. They are rare drops in the woods.", ["Merchant:fade in"]]
-    ]
-};
-
-INTERACTION_REGISTRY["merchant_logic"] = [
-    {
-        condition: {var: "quest_merchant", op: "==", val: "completed" },
-        data: {
-            log_only: "Merchant: Thanks again for those roots!" }
-        },
-    {
-        condition: [
-            { var: "quest_merchant", op: "==", val: "started" },
-            { type: "item", id: "Emerald root", op: ">=", val: 3 }
-        ], 
-        data: {
-            dialogue: merchantEndData,
-            on_finish: {
-                actions: [
-                    { type: "consume", item: "Emerald root", count: 3 },
-                    { type: "reward", item: "Leather pants", count: 1 },
-                    { type: "set_state", key: "quest_merchant", val: "completed" },
-                    { type: "log", text: "Quest Complete: Received Leather pants" }
-                ]
-            }
-        }
-    },
-    {
-        condition: { var: "quest_merchant", op: "==", val: "started" },
-        data: { dialogue: merchantWaitData }
-    },
-    {
-        condition: "default",
-        data: {
-            dialogue: merchantStartData,
-            binding: "merchant quest accept",
-            on_finish: {
-                check_var: "merchant quest accept",
-                if_true: {
-                    actions: [
-                        { type: "set_state", key: "quest_merchant", val: "started" },
-                        { type: "log", text: "Quest Started: Gather 3 Emerald Roots" }
-                    ]
-                },
-                if_false: {
-                    actions: [
-                        { type: "log", text: "Maybe later..." }
-                    ]
-                }
-            }
-        }
-    }
-];
-
-townData["scene:merchant:💬 Merchant:icon_bag.png; fn_interaction:merchant_logic"] = null;
-woodsData["harvest:cut trees:🌿 Forage:icon_plants.png"] = [ 1000, "Foraging...", { "Grass": 3, "Emerald root": 1 } ];
-
-
-// -------------------------------------------------------------
-// MODULE: QUEST - LADY V (SEDUCTRESS)
-// -------------------------------------------------------------
-Object.assign(GlobalState.variables, { "quest_seductress": "not_started", "seductress_consent": false });
-
-const barFlirtData = {
-    "background": "tavern.png",
-    "speakers": {
-        "Lady V": ["seductress.png", "(50%,0%)"]
-    },
-    "data": [
-        ["dialogue", "Lady V", "Well hello there, traveler. You look... tense.", ["Lady V:fade in"]],
-        ["dialogue", "Lady V", "A strong hero like you deserves a break.", ["Lady V:move:(60%,0%)"]],
-        ["dialogue", "Lady V", "My house is just down the street. It has a very... comfortable bed.",["Lady V:move:(50%,0%)"]],
-        ["question", "Lady V", "", [], {
-            "Buy her a drink & go with her": true,
-            "Refuse": false
-        }]
-    ]
-};
-const barAgreedData = {
-    "background": "tavern.png",
-    "speakers": {
-        "Lady V": ["seductress.png", "(50%,0%)"]
-    },
-    "data": [
-        ["dialogue", "Lady V", "Wise choice, handsome.", ["Lady V:change_sprite:seductress_happy.png","Lady V:fade in","Lady V:scale:1.2"]],
-        ["dialogue", "Lady V", "Follow me. It's not far.", ["Lady V:fade out","Lady V:scale:1.0"]]
-    ]
-};
-const nightSceneData = {
-    "background": "bedroom.png",
-    "speakers": {
-        "Lady V": ["seductress.png", "(50%,0%)"]
-    },
-    "data": [
-        ["dialogue", "Lady V", "Here we are.", ["Lady V:fade in"]],
-        ["dialogue", "Lady V", "Make yourself at home...", []],
-        ["dialogue", "Lady V", "I'll slip into something more comfortable.", ["Lady V:fade out"]],
-        ["dialogue", "", "...(a few minutes later)...", []],
-        ["dialogue", "", "*ahh*", ["Scene:shake"]],
-        ["dialogue", "", "Fuck.", []],
-        ["dialogue", "", "Harder!", []],
-        ["dialogue", "", "*ahh*", ["Scene:shake"]],
-        ["dialogue", "", "I'm coming!", ["Scene:shake"]],
-        ["dialogue", "", "...", []],
-        ["dialogue", "", "...(one night later)...", []],
-        ["dialogue", "Lady V", "Good morning, tiger.", ["Lady V:fade in"]],
-        ["dialogue", "Lady V", "That was... certainly exciting.", []],
-        ["dialogue", "Lady V", "Feel free to drop by anytime.", []]
-    ]
-};
-
-INTERACTION_REGISTRY["seductress_bar_logic"] = [
-    {
-        condition: "default",
-        data: {
-            dialogue: barFlirtData,
-            binding: "seductress_consent",
-            on_finish: {
-                check_var: "seductress_consent",
-                if_true: {
-                    dialogue: barAgreedData,
-                    actions: [
-                        { type: "set_state", key: "quest_seductress", val: "started" },
-                        { type: "goto", target: "Lady V's house" }
-                    ]
-                },
-                if_false: {
-                    actions: [
-                        { type: "log", text: "Maybe later." }
-                    ]
-                }
-            }
-        }
-    }
-];
-
-INTERACTION_REGISTRY["seductress_house_enter"] = [
-    {
-        condition: { var: "quest_seductress", op: "==", val: "started" },
-        data: {
-            dialogue: nightSceneData,
-            on_finish: {
-                actions: [
-                    { type: "set_state", key: "quest_seductress", val: "completed" },
-                    { type: "log", text: "HP Restored" },
-                    { type: "reward", item: "Gold", count: 0 }
-                ]
-            }
-        }
-    },
-    {
-        condition: "default",
-        data: {}
-    }
-];
-
-INTERACTION_REGISTRY["seductress_house_logic"] = [
-    {
-        condition: { var: "quest_seductress", op: "==", val: "completed" },
-        data: { log_only: "Lady V: Come back tonight, handsome..." }
-    },
-    {
-        condition: "default",
-        data: {
-            log_only: "Lady V: Make yourself at home."
-        }
-    }
-];
-
-townData["scene:bar:🍺 Tavern:tavern.png"] = {
-    "return:return:🔙 Leave Tavern:icon_exit.png": {},
-    "scene:lady:💃 Talk to Lady V:icon_lips.png; fn_interaction:seductress_bar_logic": null,
-};
-const seductressHouse = {
-    "return:return:🚪 Leave House:town_square.png": {},
-    "scene:lady_morning:💃 Talk to Lady V:icon_lips.png; fn_interaction:seductress_house_logic": null,
-};
-townData["scene:Lady V's house:🏠 Lady V's House:bedroom.png; fn_interaction:seductress_house_enter"] = seductressHouse;
-
-
-// -------------------------------------------------------------
-// MODULE: QUARRY & SPIDERS
-// -------------------------------------------------------------
-const copperSpider = new Enemy("Copper spider", 10, { "Copper spider legs": 1 }, new Skills(4,2,0,1));
-quarryData["harvest:mine ores:⛏️ Mine ores:icon_pickaxe.png"] = [1000, "Mining rocks...", { "Copper ore": 9, "Garnet": 1 }];
-quarryData["fight:spider:⚔️ Fight something:icon_sword.png; fn_interaction:combat_tutorial"] = [1000, "Fighting...", { "Copper spider": [1, copperSpider] }];
-
-
-// =============================================================
-// SECTION 4: WORLD MAP ASSEMBLY
-// =============================================================
-
-const worldMap = {
-    "scene:open world:Open World:world_map.png; fn_interaction:intro_logic": {
-        "scene:town:➡️ To Town:town_square.png": townData,
-        "scene:logging camp:➡️ To Logging camp:forest_clearing.png": {
-            "return:return:🔙 Exit logging camp:icon_exit.png": {},
-            "harvest:cut trees:🪓 Cut tree:icon_axe.png": [1000, "Chopping wood...", { "Oak log": 2, "Branch": 1 }],
-        },
-        "scene:mystical woods:➡️ To Mystic Woods:woods.png; fn_interaction:woods_intro": woodsData,
-        "scene:mining quarry:➡️ To Mining quarry:quarry_dark.png": quarryData,
-        "scene:ruins:➡️ Whispering Ruins:ruins_entrance.png": ruinsData,
-    },
+TownData["scene:blacksmith:🔨 Blacksmith:icon.png"] = {
+    "return:return:🔙 Exit:icon.png": {},
+    "craft:smelt ore:🧱 Smelt ores:icon.png": [1000, "Smelting ores...", { "input:Oak log": 0.5, "input:Copper ore": 1, "output:Copper ingot": 1 }],
+    "craft:craft dagger:🗡️ Make a dagger:icon.png": [1000, "Crafting...", { "input:Copper ingot": 1, "output:Copper dagger": 1 }],
+    "craft:craft dagger:🎽 Make a plate armor:icon.png": [1000, "Crafting...", { "input:Copper ingot": 2, "output:Copper plate armor": 1 }],
+    "craft:craft dagger:👖 Make a plate leggings:icon.png": [1000, "Crafting...", { "input:Copper ingot": 2, "output:Copper plate leggings": 1 }],
 };
