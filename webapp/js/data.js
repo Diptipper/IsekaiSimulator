@@ -214,7 +214,7 @@ const introCastleDlg = {
         ["dialogue","King","Our royal knights are... currently on strike. So the fate of the world falls to you.", []],
         ["dialogue","King","You look ill-equipped. Go visit the Blacksmith in town immediately.", []],
         ["dialogue","King","He requires raw materials. Go to the Quarry and mine some Copper Ore for him.", []],
-        ["dialogue","King","Once you have a weapon, clear out the spiders infesting the mines!", []],
+        ["dialogue","King","Once you have a weapon, go fight the demon lord!", []],
         ["dialogue","King","Now begone! I have... important kingly business to attend to.", ["King:fade out"]],
     ]
 };
