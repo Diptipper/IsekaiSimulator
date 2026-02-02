@@ -1,0 +1,2262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Strict Registry Editor + RPG Data</title>
+    <style>
+        :root {
+            --bg-tree: #f4f4f4;
+            --bg-main: #ffffff;
+            --border: #d1d1d1;
+            --primary: #2b5797;
+            --text: #333;
+            --accent: #eef7ff;
+        }
+
+        * { box-sizing: border-box; }
+        body, html { height: 100%; margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 13px; color: var(--text); overflow: hidden; }
+
+        /* Layout */
+        .app-shell { display: flex; flex-direction: column; height: 100%; }
+        .toolbar { padding: 8px 15px; background: #e6e6e6; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .main-view { display: flex; flex: 1; overflow: hidden; }
+
+        /* Tree Pane */
+        .tree-pane {
+            width: 20%; min-width: 250px; background: var(--bg-tree); 
+            border-right: 1px solid var(--border); overflow-y: auto; padding-bottom: 50px;
+        }
+        .tree-actions {
+            position: sticky; top: 0; background: #e6e6e6; z-index: 10;
+            padding: 5px; border-bottom: 1px solid #ccc; display: flex; gap: 2px; flex-wrap: wrap;
+        }
+        .tree-actions2 {
+            position: sticky; top: 0; background: #e6e6e6; z-index: 10;
+            padding: 5px; display: flex; gap: 2px; flex-wrap: wrap;
+        }
+        .tree-actions .btn, .tree-actions2 .btn { flex: 1; text-align: center; min-width: 45px; }
+
+        /* Node Styling */
+        .node { 
+            display: flex; align-items: center; padding: 2px 6px; 
+            cursor: default; white-space: nowrap; border: 1px solid transparent; 
+            min-height: 24px;
+        }
+        .node:hover { background: #e0e0e0; }
+        .node.selected { background: var(--accent); border-color: #add8e6; }
+        
+        .node-content { display: flex; align-items: center; flex: 1; overflow: hidden; }
+        .node-toggle { width: 18px; text-align: center; color: #666; font-family: monospace; cursor: pointer; }
+        .node-icon { width: 16px; height: 16px; margin-right: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; }
+        
+        .node-actions { display: flex; gap: 2px; margin-left: 5px; opacity: 0.6; }
+        .node:hover .node-actions { opacity: 1; }
+        
+        .btn-tree {
+            border: 1px solid #999; background: #fff; cursor: pointer; border-radius: 2px;
+            font-size: 10px; padding: 0 4px; height: 18px; line-height: 16px;
+        }
+        .btn-tree:hover { background: #eee; }
+        .btn-tree:disabled { opacity: 0.2; cursor: default; }
+        .btn-add { color: var(--primary); font-weight: bold; border-color: var(--primary); }
+        .btn-del { color: #c00; font-weight: bold; border-color: #faa; }
+
+        /* Inspector Pane */
+        .inspector-pane { flex: 1; background: var(--bg-main); display: flex; flex-direction: column; overflow: hidden; }
+        .insp-header { 
+            padding: 12px 20px; background: #fafafa; border-bottom: 1px solid var(--border); 
+            font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; 
+        }
+        .insp-content { flex: 1; overflow-y: auto; padding: 20px; }
+
+        /* Forms */
+        .form-group { display: flex; align-items: center; margin-bottom: 8px; }
+        .label { width: 130px; font-weight: 500; color: #555; }
+        .input { 
+            flex: 1; 
+            padding: 5px; 
+            border: 1px solid #aaa; 
+            border-radius: 2px; 
+            min-width: 0; 
+        }
+        .input:focus { border-color: var(--primary); outline: none; }
+        select.input { background: #fff; }
+
+        /* Visual Blocks */
+        .block-list { border: 1px solid #ddd; margin-top: 5px; border-radius: 3px; }
+        .block-head { background: #f0f0f0; padding: 5px 10px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; font-weight: bold; color: #666; }
+        .block-row { padding: 10px 85px 10px 10px; border-bottom: 1px solid #eee; position: relative; background: #fff; }
+        .block-row:last-child { border-bottom: none; }
+        .block-row:nth-child(even) { background: #fdfdfd; }
+
+        .nested-list { margin-top: 10px; border-left: 3px solid #ddd; margin-left: 5px; }
+
+        .skills-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 5px 15px;
+            background: #f9f9f9;
+            padding: 10px;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+
+        /* Buttons */
+        .btn { padding: 4px 6px; border: 1px solid #999; background: #eee; cursor: pointer; border-radius: 2px; font-size: 11px; }
+        .btn:hover { background: #ddd; }
+        .btn-primary { background: var(--primary); color: white; border: 1px solid #204275; }
+        .btn-primary:hover { opacity: 0.9; }
+        
+        .nav-link { color: var(--primary); text-decoration: underline; cursor: pointer; }
+
+        /* Context Menu */
+        #ctx { position: fixed; display: none; background: #fff; border: 1px solid #999; box-shadow: 2px 2px 10px rgba(0,0,0,0.1); z-index: 1000; min-width: 150px; }
+        .ctx-item { padding: 8px 12px; cursor: pointer; }
+        .ctx-item:hover { background: #eee; }
+
+        /* Controls */
+        .row-controls {
+            position: absolute; top: 8px; width: 75px; right: 5px; display: flex; gap: 2px;
+            background: rgba(255,255,255,0.8); border-radius: 4px;
+        }
+        .btn-mini { 
+            padding: 2px 6px; font-size: 12px; cursor: pointer; 
+            border: 1px solid #ccc; background: #fff; border-radius: 2px; line-height: 1;
+        }
+        .btn-mini:hover { background: #eee; }
+        .btn-del { color: #d00; border-color: #faa; font-weight: bold; }
+        .node.separator {
+            background: #e8e8e8;
+            border-top: 1px solid #ccc;
+            border-bottom: 1px solid #ccc;
+            height: 28px;
+            margin: 2px 0;
+        }
+        .node.separator .node-content {
+            justify-content: center;
+            font-weight: bold;
+            color: #555;
+            font-style: italic;
+        }
+        .node.separator .node-icon, 
+        .node.separator .node-toggle { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="app-shell">
+    <div class="toolbar">
+        <strong>Registry Editor</strong>
+        <div>
+            <button class="btn" onclick="saveLocal()" title="Ctrl+S">Save</button>
+            <button class="btn" style="color:#c00; border-color:#faa" onclick="clearLocal()">Clear</button>
+            <span style="margin: 0 10px; border-left: 1px solid #ccc"></span>
+            <input type="file" id="importFile" style="display:none" onchange="importJS(this)">
+            <button class="btn" onclick="document.getElementById('importFile').click()">Import Data.js</button>
+            <button class="btn" onclick="exportJS()">Export Data.js</button>
+        </div>
+    </div>
+    <div class="main-view">
+        <div class="tree-pane" id="treeRoot"></div>
+        <div class="inspector-pane" id="inspectorRoot">
+            <div style="padding:50px; text-align:center; color:#999">Select an Item to Edit</div>
+        </div>
+    </div>
+</div>
+
+<div id="ctx"></div>
+
+<script>
+    // ==========================================
+    // 1. DATA TEMPLATES
+    // ==========================================
+    
+    const T = {
+        // Base Nodes
+        variable: () => ({ name: "NewVar", value: "0" }),
+        dialogue: () => ({ name: "NewScene", background: "", speakers: [], data: [] }),
+        interaction: () => ({ name: "NewInteraction", condition: [], data: [] }),
+        weighted_enemy: () => ({ weight: 1.0, enemy: "null" }),
+        dungeon_step: () => ({ delay: 0, text: "", is_interaction: false, interaction_id: "null", contents: [] }),
+        dungeon_event: () => ({ type: "enemy", weight: 1.0, enemy: "null", interaction_id: "null" }),
+        
+        // New Nodes
+        skills: () => ({ strength:0, defense:0, vitality:0, agility:0, mining:0, woodcutting:0, smithing:0 }),
+        
+        item: () => ({ 
+            name: "NewItem", is_weapon: false, is_armor_body: false, is_armor_leggings: false, 
+            bonus_hp: 0, bonus_skills: T.skills(), scaling: "strength" 
+        }),
+
+        enemy: () => ({ 
+            name: "NewEnemy", hp: 100, maxHp: 100, loots: [], skills: T.skills() 
+        }),
+
+        follower: () => ({ 
+            name: "NewFollower", hp: 100, maxHp: 100, skills: T.skills(), interaction_id: "null" 
+        }),
+
+        // Sub-Structures
+        speaker: () => ({ name: "Speaker", sprite: "", position: "" }),
+        entry_dialogue: () => ({ type: "dialogue", speaker: "", text: "", effect: [], options: [] }),
+        effect: () => ({ subject: "Scene", effect: "fade in", params: "" }),
+        option: () => ({ text: "", value: "" }),
+        
+        entry_condition: () => ({ type: "var", var: "null", op: "==", value: "0", item: "", amount: 0, name: "", in_party: false }),
+        
+        entry_interaction: () => ({ 
+            log_only: "", 
+            dialogue: "null", 
+            binding: "null", 
+            on_finish: { check_var: "null", switch_case: [], actions: [] } 
+        }),
+        
+        switch_case: () => ({ value: "0", result: { dialogue: "null", actions: [] } }),
+        
+        action: () => ({ 
+            type: "log", 
+            item: "", amount: 0, 
+            key: "null", value: "", 
+            text: "", id: "null", target: "", 
+            enemy: [], 
+            sequence: [], 
+            delay: 0,
+            binding: "null", next: "null"
+        }),
+
+        loot: () => ({ item: "null", chance: 0.5 }),
+
+        separator: () => ({ type: "separator", name: "━━━ SEPARATOR ━━━" }),
+
+        scene: () => ({
+            type: "scene", 
+            name: "NewScene",
+            text: "Scene Text",
+            background: "",
+            parent: "top",
+            interaction_only: false,
+            no_return: false, // <--- ADD THIS LINE
+            
+            interactions: [], 
+            conditions: [],
+            
+            // Dynamic Fields
+            delay: 0,
+            action_text: "",
+            craft_inputs: [],
+            craft_outputs: [],
+            harvest_items: [],
+            exp_rewards: [],
+            enemy_list: [], // Uses weighted_enemy
+            dungeon_sequence: [] // Uses dungeon_step
+        }),
+
+        // NEW: Sub-structures for Scene
+        item_amount: () => ({ item: "null", amount: 1 }),
+        exp_reward: () => ({ skill: "strength", amount: 10 }),
+        interaction_ref: () => ({ id: "null" }), // Wrapper for interaction list
+    };
+
+    // Initial Data
+    // ==========================================
+    // INITIAL DATA SETUP
+    // ==========================================
+
+    let registry = [
+        // --- VARIABLES ---
+        { ...T.variable(), name: "introPlayed", value: "false" },
+        { ...T.variable(), name: "starting location", value: "unknown" },
+
+        // --- DIALOGUES ---
+        {
+            ...T.dialogue(),
+            name: "IntroDlg",
+            background: "heaven_clouds.png",
+            speakers: [{ name: "Goddess", sprite: "goddess.png", position: "(50%,0%)" }],
+            data: [
+                { type: "dialogue", speaker: "Goddess", text: "Dear Hero, yesterday, you died in a car accident in your world.", effect: [{ subject: "Goddess", effect: "fade in", params: "" }], options: [] },
+                { type: "dialogue", speaker: "You", text: "Huh? Is this another one of those Isekai bullshit that was popular a decade ago?", effect: [{ subject: "Scene", effect: "shake", params: "" }], options: [] },
+                { type: "dialogue", speaker: "Goddess", text: "Yes, yes. Calm down.", effect: [{ subject: "Goddess", effect: "move", params: "(80%,0%)" }], options: [] },
+                { type: "dialogue", speaker: "Goddess", text: "I will let you choose where to start your life in another world.", effect: [{ subject: "Goddess", effect: "move", params: "(20%,0%)" }], options: [] },
+                { type: "dialogue", speaker: "You", text: "Really? Can I get my cheat power too?", effect: [{ subject: "Goddess", effect: "move", params: "(50%,0%)" }], options: [] },
+                { type: "dialogue", speaker: "Goddess", text: "Don't be greedy!", effect: [{ subject: "Scene", effect: "shake", params: "" }, { subject: "Goddess", effect: "shake", params: "" }], options: [] },
+                { type: "dialogue", speaker: "Goddess", text: "Now choose!", effect: [], options: [] },
+                {
+                    type: "question", speaker: "Goddess", text: "Now choose!", effect: [],
+                    options: [
+                        { text: "I want to be the brave hero.", value: "castle" },
+                        { text: "I want to be dropped in the town.", value: "in town" },
+                        { text: "I want to be an adventurer.", value: "adventurer" },
+                        { text: "Drop me wherever.", value: "woods" }
+                    ]
+                }
+            ]
+        },
+        {
+            ...T.dialogue(),
+            name: "Intro2Dlg",
+            background: "heaven_clouds.png",
+            speakers: [{ name: "Goddess", sprite: "goddess.png", position: "(50%,0%)" }],
+            data: [
+                { type: "dialogue", speaker: "Goddess", text: "Alright, I will send you down to another world.", effect: [{ subject: "Goddess", effect: "show", params: "" }], options: [] },
+                { type: "dialogue", speaker: "Goddess", text: "Have fun there, my hero. And don't cause any trouble.", effect: [{ subject: "Goddess", effect: "fade out", params: "" }], options: [] }
+            ]
+        },
+
+        // --- INTERACTIONS ---
+        {
+            ...T.interaction(),
+            name: "GameIntro",
+            condition: [{ type: "var", var: "introPlayed", op: "==", value: "false" }],
+            data: [{
+                log_only: "",
+                dialogue: "IntroDlg",
+                binding: "starting location",
+                on_finish: {
+                    check_var: "starting location",
+                    actions: [],
+                    switch_case: [
+                        {
+                            value: "castle",
+                            result: {
+                                dialogue: "Intro2Dlg",
+                                actions: [
+                                    { type: "set_state", key: "introPlayed", value: "true" },
+                                    { type: "goto", target: "Castle" }
+                                ]
+                            }
+                        },
+                        {
+                            value: "in town",
+                            result: {
+                                dialogue: "Intro2Dlg",
+                                actions: [
+                                    { type: "set_state", key: "introPlayed", value: "true" },
+                                    { type: "goto", target: "Town" }
+                                ]
+                            }
+                        },
+                        {
+                            value: "adventurer",
+                            result: {
+                                dialogue: "Intro2Dlg",
+                                actions: [
+                                    { type: "set_state", key: "introPlayed", value: "true" },
+                                    { type: "goto", target: "Adventurer's Guild" }
+                                ]
+                            }
+                        },
+                        {
+                            value: "woods",
+                            result: {
+                                dialogue: "Intro2Dlg",
+                                actions: [
+                                    { type: "set_state", key: "introPlayed", value: "true" },
+                                    { type: "goto", target: "Woods" }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }]
+        },
+        { ...T.interaction(), name: "CastleInt", data: [{ log_only: "Guard: Begone, pleb!", dialogue: "null", binding: "null", on_finish: { check_var: "null", switch_case: [], actions: [] } }] },
+        { ...T.interaction(), name: "AdvGuildInt" },
+        { ...T.interaction(), name: "WoodsInt" },
+
+        // --- SCENES (MAPS) ---
+        { ...T.scene(), name: "Open World", text: "Open World", interactions: [{ id: "GameIntro" }] },
+        { ...T.scene(), name: "Town", text: "Town", parent: "Open World" },
+        { ...T.scene(), name: "Woods", text: "Woods", parent: "Open World", interactions: [{ id: "WoodsInt" }] },
+        { ...T.scene(), name: "Castle", text: "Castle", parent: "Town", interactions: [{ id: "CastleInt" }] },
+        { ...T.scene(), name: "Adventurer's Guild", text: "Adventurer's Guild", parent: "Town", interactions: [{ id: "AdvGuildInt" }] }
+    ];
+
+    // ==========================================
+    // AUTO-LOAD CACHE
+    // ==========================================
+    const CACHE_KEY = 'rpg_editor_cache';
+    const cachedData = localStorage.getItem(CACHE_KEY);
+    if(cachedData) {
+        try {
+            registry = JSON.parse(cachedData);
+            console.log("Registry loaded from local cache.");
+        } catch(e) {
+            console.error("Failed to load cache", e);
+        }
+    }
+    
+    let collapsedPaths = new Set(); 
+    let selectedPath = null; 
+    let inspectorStack = []; 
+
+    // ==========================================
+    // 2. HELPERS
+    // ==========================================
+
+    const get = (path) => {
+        let r = registry;
+        if(path[0] === 'root') return r;
+        for(let k of path) r = r[k];
+        return r;
+    }
+
+    const getType = (d) => {
+        if(d.type === 'separator') return 'separator';
+        if(d.parent !== undefined) return 'scene'; // NEW
+        if(d.is_weapon !== undefined) return 'item';
+        if(d.loots !== undefined) return 'enemy';
+        if(d.interaction_id !== undefined) return 'follower';
+        if(d.speakers !== undefined) return 'dialogue';
+        if(d.condition !== undefined) return 'interaction';
+        if(d.value !== undefined && d.name !== undefined) return 'variable';
+        return 'unknown';
+    }
+
+    const getDropdown = (type) => {
+        let list = ["null"]; 
+        registry.forEach(i => {
+            if(type === 'var' && i.value !== undefined && i.name) list.push(i.name);
+            if(type === 'dialogue' && i.speakers) list.push(i.name);
+            if(type === 'interaction' && i.condition) list.push(i.name);
+            if(type === 'item' && i.is_weapon !== undefined) list.push(i.name);
+            if(type === 'enemy' && i.loots !== undefined) list.push(i.name);
+            if(type === 'follower' && i.interaction_id !== undefined) list.push(i.name);
+            if(type === 'scene' && i.parent !== undefined) list.push(i.name);
+        });
+        return list;
+    }
+
+    window.moveItem = (btn, idx, direction) => {
+        pushState();
+        let row = btn.closest('.block-row');
+        let arr = row.arr;
+        let targetIdx = idx + direction;
+        if (targetIdx >= 0 && targetIdx < arr.length) {
+            let temp = arr[idx];
+            arr[idx] = arr[targetIdx];
+            arr[targetIdx] = temp;
+            refresh(); 
+        }
+    }
+
+    window.addRootItem = (type) => {
+        pushState();
+        const newItem = T[type]();
+        let targetIndex = registry.length; // Default: Add to very end
+
+        if (selectedPath) {
+            // Get the root index regardless of how deep we are
+            // Example: "5,data,2" -> split gets ["5", "data", "2"] -> returns 5
+            const rootIndex = parseInt(selectedPath.split(',')[0]);
+            
+            if (!isNaN(rootIndex)) {
+                targetIndex = rootIndex + 1;
+            }
+        }
+
+        // Insert at the calculated position
+        registry.splice(targetIndex, 0, newItem);
+        
+        // Select the new item
+        selectedPath = targetIndex.toString();
+        
+        refresh();
+        
+        // Optional: Scroll the new item into view
+        setTimeout(() => {
+            const rootNodes = document.querySelectorAll('#treeRoot > .node');
+            if(rootNodes[targetIndex]) {
+                rootNodes[targetIndex].scrollIntoView({ block: "center" });
+            }
+        }, 50);
+    }
+
+    // ==========================================
+    // 3. TREE ENGINE
+    // ==========================================
+
+    function renderTree() {
+        const root = document.getElementById('treeRoot');
+        root.innerHTML = '';
+        
+        // Toolbar 1: Variables & Dialogues (0px)
+        let toolbar1 = document.createElement('div');
+        toolbar1.className = 'tree-actions2';
+        toolbar1.style.top = "0px"; 
+        toolbar1.innerHTML = `
+            <button class="btn" onclick="addRootItem('variable')">➕ Variable</button>
+            <button class="btn" onclick="addRootItem('dialogue')">➕ Dialogue</button>
+        `;
+        root.appendChild(toolbar1);
+
+        // Toolbar 2: Items, Enemies, Followers (33px)
+        let toolbar2 = document.createElement('div');
+        toolbar2.className = 'tree-actions2';
+        toolbar2.style.top = "33px"; 
+        toolbar2.innerHTML = `
+            <button class="btn" onclick="addRootItem('item')">➕ Item</button>
+            <button class="btn" onclick="addRootItem('enemy')">➕ Enemy</button>
+            <button class="btn" onclick="addRootItem('follower')">➕ Follower</button>
+        `;
+        root.appendChild(toolbar2);
+
+        // Toolbar 3: Interactions & Scenes (66px)
+        let toolbar3 = document.createElement('div');
+        toolbar3.className = 'tree-actions2'; // Changed to tree-actions2 for consistent sizing
+        toolbar3.style.top = "66px"; 
+        toolbar3.innerHTML = `
+            <button class="btn" onclick="addRootItem('interaction')">➕ Interaction</button>
+            <button class="btn" onclick="addRootItem('scene')">➕ Scene</button>
+        `;
+        root.appendChild(toolbar3);
+
+        // Toolbar 4: Expand/Collapse (99px)
+        let toolbar4 = document.createElement('div');
+        toolbar4.className = 'tree-actions';
+        toolbar4.style.top = "99px"; 
+        toolbar4.style.borderBottom = "2px solid #bbb"; // Visual separation
+        toolbar4.innerHTML = `
+            <button class="btn" onclick="expandAll()">Expand All</button>
+            <button class="btn" onclick="collapseAll()">Collapse All</button>
+        `;
+        root.appendChild(toolbar4);
+
+        registry.forEach((item, idx) => {
+            let type = getType(item);
+            let path = [idx];
+            
+            let isLeaf = ['variable', 'item', 'follower', 'separator', 'scene'].includes(type);
+
+            root.appendChild(mkNode(
+                item.name || `[${idx}]`, type, path, !isLeaf, idx, registry.length
+            ));
+            
+            if(!collapsedPaths.has(path.join(',')) && !isLeaf) {
+                let cont = document.createElement('div');
+                cont.style.paddingLeft = '20px';
+                
+                if(type === 'dialogue') {
+                    renderVirtualArray(cont, "Speakers", [...path, 'speakers'], item.speakers, 'speaker');
+                    renderVirtualArray(cont, "Dialogue", [...path, 'data'], item.data, 'entry_dialogue');
+                }
+                if(type === 'interaction') {
+                    renderVirtualArray(cont, "Conditions", [...path, 'condition'], item.condition, 'entry_condition');
+                    renderVirtualArray(cont, "Interaction Sequence", [...path, 'data'], item.data, 'entry_interaction');
+                }
+                if(type === 'enemy') {
+                     renderVirtualArray(cont, "Loots", [...path, 'loots'], item.loots, 'loot');
+                }
+                root.appendChild(cont);
+            }
+        });
+
+        root.oncontextmenu = (e) => {
+            if(e.target === root) showCtx(e, 'root', []);
+        };
+    }
+
+    window.expandAll = () => {
+        collapsedPaths.clear(); // Empty set = everything expanded
+        renderTree();
+    };
+
+    window.collapseAll = () => {
+        // To collapse everything, we must add every expandable path to the set
+        registry.forEach((item, idx) => {
+            let type = getType(item);
+            let path = String(idx);
+            
+            // 1. Collapse Root Node if it has children
+            if(!['variable', 'item', 'follower', 'separator', 'scene'].includes(type)) {
+                collapsedPaths.add(path);
+
+                // 2. Collapse Inner Virtual Folders
+                if(type === 'dialogue') {
+                    collapsedPaths.add(path + ",speakers");
+                    collapsedPaths.add(path + ",data");
+                }
+                else if(type === 'interaction') {
+                    collapsedPaths.add(path + ",condition");
+                    collapsedPaths.add(path + ",data");
+                }
+                else if(type === 'enemy') {
+                    collapsedPaths.add(path + ",loots");
+                }
+            }
+        });
+        renderTree();
+    };
+    window.collapseAll();
+
+    function renderVirtualArray(parent, label, path, arr, childType) {
+        let pathStr = path.join(',');
+        let isCollapsed = collapsedPaths.has(pathStr);
+        
+        let div = document.createElement('div');
+        let head = document.createElement('div');
+        head.className = `node ${selectedPath === pathStr ? 'selected' : ''}`;
+        
+        let addBtn = `<div class="node-actions">
+                        <button class="btn-tree btn-add" title="Add Item" onclick="event.stopPropagation(); ctxAct('${childType}', '${pathStr}')">+</button>
+                      </div>`;
+        
+        icon = "📂";
+        if(label==="Speakers"){
+            icon="🗣️";
+        }else if(label==="Dialogue"){
+            icon="🎬";
+        }else if(label==="Conditions"){
+            icon="☑️";
+        }else if(label==="Interaction Sequence"){
+            icon="🔹";
+        }
+
+        head.innerHTML = `
+            <div class="node-content">
+                <span class="node-toggle">${arr.length ? (isCollapsed?'▸':'▾'):' '}</span>
+                <span class="node-icon">${icon}</span>
+                <span>${label} [${label==="Conditions"&&arr.length==0?"default":arr.length}]</span>
+            </div>
+            ${addBtn}
+        `;
+        
+        head.onclick = () => selectPath(path);
+        head.oncontextmenu = (e) => showCtx(e, 'folder', path, childType);
+        
+        head.querySelector('.node-toggle').onclick = (e) => {
+            e.stopPropagation();
+            if(isCollapsed) collapsedPaths.delete(pathStr); else collapsedPaths.add(pathStr);
+            renderTree();
+        };
+
+        div.appendChild(head);
+        
+        if(!isCollapsed) {
+            let list = document.createElement('div');
+            list.style.paddingLeft = '20px';
+            arr.forEach((item, i) => {
+                let lbl = `[${i}]`;
+                if(childType === 'speaker') lbl = item.name;
+                if(childType === 'entry_dialogue') lbl = (item.text || "").substring(0,15);
+                if(childType === 'loot') lbl = `${item.item} (${item.chance})`;
+                if(childType === 'entry_interaction') lbl = item.log_only ? `Log` : `Dial: ${item.dialogue}`;
+                
+                if(childType === 'entry_condition') {
+                    if(item.type === 'item') {
+                        lbl = `${item.item || '?'} ${item.op} ${item.amount}`;
+                    } else if(item.type === 'var') {
+                        lbl = `${item.var || '?'} ${item.op} ${item.value}`;
+                    } else if(item.type === 'follower') {
+                        lbl = `${item.name || '?'} ${item.in_party ? 'In Party' : 'Not In Party'}`;
+                    }
+                }
+                
+                list.appendChild(mkNode(lbl, 'list_item', [...path, i], false, i, arr.length));
+            });
+            div.appendChild(list);
+        }
+        parent.appendChild(div);
+    }
+
+    function mkNode(label, type, path, hasChildren, index, totalLength) {
+        let d = document.createElement('div');
+        let pathStr = path.join(',');
+        let isCollapsed = collapsedPaths.has(pathStr);
+        
+        // Default Icon
+        let icon = '📄'; 
+        let typetxt = '';
+
+        // Root Node Types
+        if(type==='variable'){ icon='⚙️'; typetxt='Var'}
+        if(type==='dialogue'){ icon='💬'; typetxt='Dlg'}
+        if(type==='interaction'){ icon='🔀'; typetxt='Int'}
+        if(type==='item'){ icon='🎁'; typetxt='Itm'} // Inventory Item
+        if(type==='enemy'){ icon='🥷'; typetxt='Enm'}
+        if(type==='follower'){ icon='🧝‍♂️'; typetxt='Fol'}
+        if(type==='scene'){ icon='🌳'; typetxt='Scn'}
+
+        // CHANGED: Specific style for children in lists (Virtual Array Items)
+        if(type==='list_item'){ icon='▪'; typetxt=''} 
+
+        // Apply formatting
+        typetxt = (typetxt!=='') ? `[${typetxt}]&nbsp;` : '';
+
+        d.className = `node ${selectedPath === pathStr ? 'selected' : ''}`;
+        if(type === 'separator') d.className += ' separator';
+
+        let upDisabled = index === 0 ? 'disabled' : '';
+        let downDisabled = index === totalLength - 1 ? 'disabled' : '';
+        
+        let controls = `
+            <div class="node-actions">
+                <button class="btn-tree" ${upDisabled} onclick="event.stopPropagation(); moveTreeItemByPath('${pathStr}', -1)">↑</button>
+                <button class="btn-tree" ${downDisabled} onclick="event.stopPropagation(); moveTreeItemByPath('${pathStr}', 1)">↓</button>
+                <button class="btn-tree" onclick="event.stopPropagation(); duplicateTreeItemByPath('${pathStr}')" title="Duplicate">📋</button>
+                <button class="btn-tree btn-del" onclick="event.stopPropagation(); deleteTreeItemByPath('${pathStr}')">×</button>
+            </div>
+        `;
+
+        d.innerHTML = `
+            <div class="node-content">
+                <span class="node-toggle">${hasChildren ? (isCollapsed?'▸':'▾'):''}</span>
+                <span class="node-icon">${icon}</span>
+                <span>${typetxt}</span><span>${label}</span>
+            </div>
+            ${controls}
+        `;
+        
+        d.onclick = (e) => { e.stopPropagation(); selectPath(path); };
+        d.oncontextmenu = (e) => showCtx(e, type, path);
+        
+        if(hasChildren) {
+            d.querySelector('.node-toggle').onclick = (e) => {
+                e.stopPropagation();
+                if(isCollapsed) collapsedPaths.delete(pathStr); else collapsedPaths.add(pathStr);
+                renderTree();
+            };
+        }
+        return d;
+    }
+
+    // ==========================================
+    // 4. INSPECTOR ENGINE
+    // ==========================================
+
+    function selectPath(path) {
+        selectedPath = path.join(',');
+        inspectorStack = []; 
+        renderTree();
+        renderInspector();
+    }
+
+    function renderInspector() {
+        const root = document.getElementById('inspectorRoot');
+        root.innerHTML = '';
+        
+        let data, title;
+        if(inspectorStack.length > 0) {
+            let state = inspectorStack[inspectorStack.length-1];
+            data = state.data;
+            title = state.title;
+        } else if (selectedPath) {
+            data = get(selectedPath.split(','));
+            let t = getType(data);
+            title = t === 'unknown' ? 'Editor' : t.toUpperCase();
+        }
+
+        if(!data) {
+            root.innerHTML = `<div style="padding:50px; text-align:center; color:#999">Select an item</div>`;
+            return;
+        }
+
+        let head = document.createElement('div');
+        head.className = 'insp-header';
+        if(inspectorStack.length > 0) {
+            head.innerHTML = `<span class="nav-link" onclick="popInspector()">Back</span> <span>&rsaquo;</span> <span>${title}</span>`;
+        } else {
+            head.innerText = title;
+        }
+        root.appendChild(head);
+
+        let content = document.createElement('div');
+        content.className = 'insp-content';
+        renderFields(content, data);
+        root.appendChild(content);
+    }
+
+    function renderSkills(p, skillObj) {
+        if(!skillObj) return;
+        let c = document.createElement('div');
+        c.innerHTML = '<div class="label" style="font-weight:bold; margin-bottom:5px">Skills Stats</div>';
+        
+        let grid = document.createElement('div');
+        grid.className = 'skills-grid';
+
+        ['strength','defense','vitality','agility','mining','woodcutting','smithing'].forEach(k => {
+             let div = document.createElement('div');
+             div.innerHTML = `<span style="font-size:10px; text-transform:uppercase; color:#888">${k}</span>`;
+             let i = document.createElement('input');
+             i.className = 'input'; i.type='number'; i.style.width='100%'; i.value = skillObj[k];
+             // Direct object mutation since skillObj is a reference
+             i.onchange = (e) => { skillObj[k] = parseFloat(e.target.value); };
+             div.appendChild(i);
+             grid.appendChild(div);
+        });
+        c.appendChild(grid);
+        p.appendChild(c);
+    }
+
+    function renderFields(p, d) {
+        // --- SEPARATOR ---
+        if(d.type === 'separator') {
+             inp(p, "Display Text", d.name, v=>d.name=v);
+             return;
+        }
+
+        // --- SCENE NODE ---
+        if(d.parent !== undefined) {
+            
+            // 1. Type Selector
+            sel(p, "Type", ["scene","fight","dungeon","craft","harvest","return"], d.type, v=>{d.type=v; refresh()});
+            
+            // 2. Early Exit for 'return'
+            if(d.type === 'return') return;
+
+            // 3. Common Fields
+            inp(p, "Name", d.name, v=>d.name=v);
+            inp(p, "Text", d.text, v=>d.text=v);
+            inp(p, "Background", d.background, v=>d.background=v);
+            
+            // LOOP PREVENTION LOGIC
+            // Helper to find all descendants of the current node
+            const getDescendants = (rootName) => {
+                let desc = new Set();
+                let stack = [rootName];
+                while(stack.length > 0) {
+                    let curr = stack.pop();
+                    registry.forEach(r => {
+                        // If this item claims 'curr' as parent, it is a child
+                        if(r.parent !== undefined && r.parent === curr) {
+                            if(!desc.has(r.name)) {
+                                desc.add(r.name);
+                                stack.push(r.name);
+                            }
+                        }
+                    });
+                }
+                return desc;
+            };
+
+            let invalidParents = getDescendants(d.name);
+            invalidParents.add(d.name); // Add self
+            
+            // Filter: Allow "top", exclude null, exclude self, exclude all descendants
+            let parents = ["top", ...getDropdown('scene').filter(n => n !== 'null' && !invalidParents.has(n))]; 
+            sel(p, "Parent", parents, d.parent, v=>d.parent=v);
+            
+            let chk = document.createElement('div'); chk.className='form-group';
+            chk.innerHTML = `<span class="label">Interaction Only</span><input type="checkbox" ${d.interaction_only?'checked':''} onchange="d.interaction_only=this.checked">`;
+            p.appendChild(chk);
+
+            let chk2 = document.createElement('div'); chk2.className='form-group';
+            chk2.innerHTML = `<span class="label">No Return</span><input type="checkbox" ${d.no_return?'checked':''} onchange="d.no_return=this.checked">`;
+            p.appendChild(chk2);
+            
+            // 4. Interaction Lists
+            
+            // Interactions
+            renderList(p, "Interaction Script", d.interactions, T.interaction_ref, (ref) => {
+                return `<div class="form-group" style="margin-bottom:0"><select class="input" onchange="updateObj(this, 'id')">${renderOpts(getDropdown('interaction'), ref.id)}</select></div>`;
+            });
+
+            // Conditions (CHANGED: Now renders as a list of Interactions)
+            renderList(p, "Appearing Conditions", d.conditions, T.interaction_ref, (ref) => {
+                return `<div class="form-group" style="margin-bottom:0"><select class="input" onchange="updateObj(this, 'id')">${renderOpts(getDropdown('interaction'), ref.id)}</select></div>`;
+            });
+
+            p.appendChild(document.createElement('hr'));
+
+            // 5. Conditional Fields
+            
+            const renderItemList = (title, arr) => {
+                renderList(p, title, arr, T.item_amount, (ia) => `
+                    <div style="display:flex; gap:5px">
+                        <select class="input" style="flex:2" onchange="updateObj(this,'item')">${renderOpts(getDropdown('item'), ia.item)}</select>
+                        <input class="input" type="number" style="flex:1" value="${ia.amount}" placeholder="#" onchange="updateObj(this,'amount')">
+                    </div>
+                `);
+            };
+
+            const renderExpList = (arr) => {
+                renderList(p, "Exp Rewards", arr, T.exp_reward, (er) => `
+                    <div style="display:flex; gap:5px">
+                        <select class="input" style="flex:2" onchange="updateObj(this,'skill')">${renderOpts(["strength","defense","vitality","agility","mining","woodcutting","smithing"], er.skill)}</select>
+                        <input class="input" type="number" style="flex:1" value="${er.amount}" placeholder="#" onchange="updateObj(this,'amount')">
+                    </div>
+                `);
+            };
+
+            if(d.type === 'craft') {
+                inp(p, "Delay", d.delay, v=>d.delay=v, "number");
+                inp(p, "Action Txt", d.action_text, v=>d.action_text=v);
+                renderItemList("Inputs", d.craft_inputs);
+                renderItemList("Outputs", d.craft_outputs);
+                renderExpList(d.exp_rewards);
+            }
+
+            if(d.type === 'harvest') {
+                inp(p, "Delay", d.delay, v=>d.delay=v, "number");
+                inp(p, "Action Txt", d.action_text, v=>d.action_text=v);
+                renderItemList("Harvest Items", d.harvest_items);
+                renderExpList(d.exp_rewards);
+            }
+
+            if(d.type === 'fight') {
+                inp(p, "Delay", d.delay, v=>d.delay=v, "number");
+                inp(p, "Action Txt", d.action_text, v=>d.action_text=v);
+                renderList(p, "Enemy List", d.enemy_list, T.weighted_enemy, (we) => `
+                    <div style="display:flex; gap:5px">
+                        <input class="input" type="number" step="0.1" style="flex:1" value="${we.weight}" placeholder="Wgt" onchange="updateObj(this, 'weight')">
+                        <select class="input" style="flex:3" onchange="updateObj(this, 'enemy')">${renderOpts(getDropdown('enemy'), we.enemy)}</select>
+                    </div>
+                `);
+            }
+
+            if(d.type === 'dungeon') {
+                renderList(p, "Battle Sequence", d.dungeon_sequence, T.dungeon_step, (step, stepDiv) => {
+                    // 1. Basic Fields + Interaction Toggle
+                    stepDiv.innerHTML = `
+                        <div class="form-group"><span class="label">Delay (ms)</span><input class="input" type="number" value="${step.delay}" onchange="updateObj(this,'delay')"></div>
+                        <div class="form-group"><span class="label">Notification</span><input class="input" value="${step.text}" onchange="updateObj(this,'text')"></div>
+                        <div class="form-group" style="background:#eef7ff; padding:5px; border-radius:3px;">
+                            <span class="label">Is Interaction?</span>
+                            <input type="checkbox" ${step.is_interaction ? 'checked' : ''} onchange="pushState(); this.closest('.block-row').ref.is_interaction = this.checked; refresh()">
+                        </div>
+                    `;
+
+                    // 2. Logic Branch: Interaction vs Enemy List
+                    if (step.is_interaction) {
+                        // --- INTERACTION MODE ---
+                        let intDiv = document.createElement('div');
+                        intDiv.className = 'form-group';
+                        intDiv.innerHTML = `
+                            <span class="label">Interaction</span>
+                            <select class="input" onchange="updateObj(this, 'interaction_id')">
+                                ${renderOpts(getDropdown('interaction'), step.interaction_id)}
+                            </select>
+                        `;
+                        stepDiv.appendChild(intDiv);
+                    } else {
+                        // --- ENEMY MODE (Standard) ---
+                        if(!step.contents && step.enemies) { step.contents = step.enemies; delete step.enemies; }
+                        if(!step.contents) step.contents = [];
+
+                        let contentBox = document.createElement('div');
+                        contentBox.className = 'nested-list'; 
+                        contentBox.style.marginTop = "5px";
+                        stepDiv.appendChild(contentBox);
+
+                        renderList(contentBox, "Enemies", step.contents, T.dungeon_event, (evt) => {
+                            evt.type = 'enemy'; // Enforce type
+                            return `
+                                <div style="display:flex; gap:5px">
+                                    <input class="input" type="number" step="0.1" style="flex:1" value="${evt.weight}" placeholder="Wgt" title="Weight" onchange="updateObj(this, 'weight')">
+                                    <select class="input" style="flex:3" onchange="updateObj(this, 'enemy')">
+                                        ${renderOpts(getDropdown('enemy'), evt.enemy)}
+                                    </select>
+                                </div>`;
+                        });
+                    }
+                });
+            }
+            return; 
+        }
+
+        // --- ITEM ---
+        if(d.is_weapon !== undefined) { 
+            inp(p, "Name", d.name, v=>d.name=v);
+            sel(p, "Scaling", ["strength","dexterity","intelligence"], d.scaling, v=>d.scaling=v);
+            
+            let flags = document.createElement('div'); flags.className='form-group';
+            flags.innerHTML = `<span class="label">Type</span>
+                <label><input type="checkbox" ${d.is_weapon?'checked':''} onchange="d.is_weapon=this.checked; refresh()"> Is weapon</label> &nbsp;
+                <label><input type="checkbox" ${d.is_armor_body?'checked':''} onchange="d.is_armor_body=this.checked"> Is body armor</label> &nbsp;
+                <label><input type="checkbox" ${d.is_armor_leggings?'checked':''} onchange="d.is_armor_leggings=this.checked"> Is leg armor</label>
+            `;
+            flags.querySelectorAll('input')[0].onchange = (e) => { d.is_weapon = e.target.checked; };
+            flags.querySelectorAll('input')[1].onchange = (e) => { d.is_armor_body = e.target.checked; };
+            flags.querySelectorAll('input')[2].onchange = (e) => { d.is_armor_leggings = e.target.checked; };
+            p.appendChild(flags);
+
+            inp(p, "Bonus HP", d.bonus_hp, v=>d.bonus_hp=v, "number");
+            renderSkills(p, d.bonus_skills);
+            return;
+        }
+
+        // --- ENEMY ---
+        if(d.loots !== undefined) { 
+            inp(p, "Name", d.name, v=>d.name=v);
+            inp(p, "HP", d.hp, v=>{d.hp=v; d.maxHp=v;}, "number");
+            renderSkills(p, d.skills);
+            return;
+        }
+
+        // --- FOLLOWER ---
+        if(d.interaction_id !== undefined) { 
+            inp(p, "Name", d.name, v=>d.name=v);
+            inp(p, "HP", d.hp, v=>{d.hp=v; d.maxHp=v;}, "number");
+            sel(p, "Interaction", getDropdown('interaction'), d.interaction_id, v=>d.interaction_id=v);
+            renderSkills(p, d.skills);
+            return;
+        }
+
+        // --- DIALOGUE ROOT ---
+        if(d.speakers !== undefined) { 
+            inp(p, "Name", d.name, v=>d.name=v);
+            inp(p, "Background", d.background, v=>d.background=v);
+            return;
+        }
+
+        // --- INTERACTION ROOT ---
+        if(d.condition !== undefined) { 
+            inp(p, "Name", d.name, v=>d.name=v);
+            return;
+        }
+
+        // --- SUB OBJECTS ---
+
+        if(d.item !== undefined && d.chance !== undefined) { // LOOT
+            sel(p, "Item", getDropdown('item'), d.item, v=>d.item=v);
+            inp(p, "Chance (0-1)", d.chance, v=>d.chance=v, "number");
+            return;
+        }
+        
+        if(d.sprite !== undefined) { // SPEAKER
+            inp(p, "Name", d.name, v=>d.name=v);
+            inp(p, "Sprite", d.sprite, v=>d.sprite=v);
+            inp(p, "Position", d.position, v=>d.position=v);
+            return;
+        }
+        
+        if(d.effect !== undefined) { // DIALOGUE ENTRY
+            sel(p, "Type", ["dialogue","question"], d.type, v=>{d.type=v; refresh()});
+            inp(p, "Speaker", d.speaker, v=>d.speaker=v);
+            inp(p, "Text", d.text, v=>d.text=v);
+            
+            renderList(p, "Effects", d.effect, T.effect, (ef) => {
+                let html = `
+                <div style="display:flex; gap:5px; margin-bottom:5px; width:100%;">
+                    <select class="input" style="flex:1" onchange="updateObj(this,'subject')">
+                        ${renderOpts(getContextSpeakers(), ef.subject)}
+                    </select>
+                    <select class="input" style="flex:1" onchange="updateObj(this,'effect', true)">
+                        ${renderOpts(["fade in","fade out","shake","show","hide","move","scale","change_sprite"], ef.effect)}
+                    </select>
+                </div>`;
+                if(["move","scale","change_sprite"].includes(ef.effect)) {
+                    html += `<input class="input" style="width:100%" value="${ef.params}" placeholder="Params" onchange="updateObj(this,'params')">`;
+                }
+                return html;
+            });
+
+            if(d.type === 'question') {
+                renderList(p, "Options", d.options, T.option, (opt) => `
+                    <div style="display:flex; gap:5px">
+                        <input class="input" style="flex:2" value="${opt.text}" onchange="updateObj(this,'text')">
+                        <div style="width:5px"></div>
+                        <input class="input" style="flex:1" value="${opt.value}" placeholder="Val" onchange="updateObj(this,'value')">
+                        <div style="width:5px"></div>
+                    </div>`
+                );
+            }
+            return;
+        }
+        
+        if(d.op !== undefined && d.var !== undefined) { // CONDITION (Interaction)
+            sel(p, "Type", ["var","item","follower"], d.type, v=>{d.type=v; refresh()});
+            if(d.type === 'var') {
+                sel(p, "Variable", getDropdown('var'), d.var, v=>d.var=v);
+                sel(p, "Op", ["==","!=","<",">","<=",">="], d.op, v=>d.op=v);
+                inp(p, "Value", d.value, v=>d.value=v);
+            }
+            if(d.type === 'item') {
+                sel(p, "Item", getDropdown('item'), d.item, v=>d.item=v);
+                sel(p, "Op", ["==","!=","<",">","<=",">="], d.op, v=>d.op=v);
+                inp(p, "Amount", d.amount, v=>d.amount=v, "number");
+            }
+            if(d.type === 'follower') {
+                inp(p, "Name", d.name, v=>d.name=v);
+                sel(p, "In Party", ["true","false"], d.in_party, v=>d.in_party=(v==='true'));
+            }
+            return;
+        }
+        
+        if(d.log_only !== undefined) { // INTERACTION FLOW
+            let div = document.createElement('div'); div.className = 'form-group';
+            div.innerHTML = `<span class="label">Log Only</span>`;
+            let input = document.createElement('input'); 
+            input.className = 'input'; input.value = d.log_only;
+            input.oninput = (e) => { d.log_only = e.target.value; };
+            input.onblur = () => refresh(); 
+            input.onkeydown = (e) => { if(e.key === 'Enter') refresh(); };
+            div.appendChild(input); p.appendChild(div);
+
+            if(d.log_only === "") {
+                p.appendChild(document.createElement('hr'));
+                sel(p, "Dialogue", getDropdown('dialogue'), d.dialogue, v=>d.dialogue=v);
+                sel(p, "Binding", getDropdown('var'), d.binding, v=>d.binding=v);
+                
+                let of = d.on_finish;
+                p.appendChild(document.createElement('br'));
+                let h = document.createElement('div'); h.innerHTML="<b>On Finish</b>"; p.appendChild(h);
+                sel(p, "Check Var", getDropdown('var'), of.check_var, v=>{of.check_var=v; refresh();});
+
+                if(of.check_var !== 'null') {
+                    renderList(p, `Switch Cases (${of.check_var})`, of.switch_case, T.switch_case, (sc, container) => {
+                        let top = document.createElement('div');
+                        top.innerHTML = `
+                            <div style="display:flex; gap:5px; margin-bottom:5px">
+                                <span style="align-self:center; font-weight:bold; width:40px">Val:</span>
+                                <input class="input" value="${sc.value}" onchange="updateObj(this,'value')">
+                            </div>
+                            <div style="display:flex; gap:5px; margin-bottom:5px">
+                                <span style="align-self:center; font-weight:bold; width:40px">Res:</span>
+                                <select class="input" onchange="updateObj(this,'result.dialogue')">${renderOpts(getDropdown('dialogue'), sc.result.dialogue)}</select>
+                            </div>
+                        `;
+                        container.appendChild(top);
+                        let nested = document.createElement('div'); nested.className = 'nested-list';
+                        renderActionList(nested, sc.result.actions);
+                        container.appendChild(nested);
+                    });
+                } else {
+                    renderActionList(p, of.actions);
+                }
+            }
+            return;
+        }
+
+        // FALLBACK: Variable
+        if(d.value !== undefined) {
+             inp(p, "Name", d.name, v=>d.name=v);
+             inp(p, "Value", d.value, v=>d.value=v);
+        }
+    }
+
+    function renderActionList(parent, actionArray) {
+        renderList(parent, "Actions", actionArray, T.action, (act, contentDiv) => {
+            
+            // 1. Common Type Selector
+            let html = `<div class="form-group"><span class="label">Type</span>
+                        <select class="input" onchange="updateObj(this,'type',true)">${renderOpts(["consume","reward","set_state","log","interaction","goto","fight","dungeon"], act.type)}</select></div>`;
+            
+            // Helper for simple rows
+            const row = (l, k, type='text') => `<div class="form-group"><span class="label">${l}</span><input class="input" type="${type}" value="${act[k]}" onchange="updateObj(this,'${k}')"></div>`;
+            const selRow = (l, k, list) => `<div class="form-group"><span class="label">${l}</span><select class="input" onchange="updateObj(this,'${k}')">${renderOpts(list, act[k])}</select></div>`;
+
+            // 2. Render Simple Fields based on Type
+            if(act.type === 'consume' || act.type === 'reward') {
+                let combinedList = [...getDropdown('item'), ...getDropdown('follower').filter(x => x !== 'null')];
+                html += selRow("Item/Fol", "item", combinedList);
+                html += row("Amount", "amount", "number");
+            }
+            if(act.type === 'set_state') {
+                html += selRow("Key (Var)", "key", getDropdown('var'));
+                html += row("Value", "value");
+            }
+            if(act.type === 'log') {
+                html += row("Text", "text");
+            }
+            if(act.type === 'interaction') {
+                html += selRow("ID", "id", getDropdown('interaction'));
+            }
+            
+            // CHANGED: Now uses Scene Dropdown
+            if(act.type === 'goto') {
+                html += selRow("Target", "target", getDropdown('scene'));
+            }
+
+            // 3. Complex Types (Fight & Dungeon)
+            
+            // --- FIGHT ---
+            if(act.type === 'fight') {
+                html += row("Text", "text");
+                html += row("Delay", "delay", "number");
+                html += selRow("Binding", "binding", getDropdown('var'));
+                html += selRow("Next", "next", getDropdown('interaction'));
+                
+                contentDiv.innerHTML = html;
+
+                let listCont = document.createElement('div');
+                listCont.className = 'nested-list';
+                contentDiv.appendChild(listCont);
+
+                renderList(listCont, "Enemy Probabilities", act.enemy, T.weighted_enemy, (we) => {
+                    return `
+                        <div style="display:flex; gap:5px">
+                            <input class="input" type="number" step="0.1" style="flex:1" value="${we.weight}" placeholder="Wgt" onchange="updateObj(this, 'weight')">
+                            <select class="input" style="flex:3" onchange="updateObj(this, 'enemy')">
+                                ${renderOpts(getDropdown('enemy'), we.enemy)}
+                            </select>
+                        </div>
+                    `;
+                });
+                return; 
+            }
+
+            // --- DUNGEON ---
+            if(act.type === 'dungeon') {
+                html += row("Text", "text"); 
+                html += selRow("Binding", "binding", getDropdown('var'));
+                html += selRow("Next", "next", getDropdown('interaction'));
+                
+                contentDiv.innerHTML = html;
+
+                let listCont = document.createElement('div');
+                listCont.className = 'nested-list';
+                contentDiv.appendChild(listCont);
+
+                renderList(listCont, "Dungeon Sequence", act.sequence, T.dungeon_step, (step, stepDiv) => {
+                    stepDiv.innerHTML = `
+                        <div class="form-group"><span class="label">Delay</span><input class="input" type="number" value="${step.delay}" onchange="updateObj(this,'delay')"></div>
+                        <div class="form-group"><span class="label">Pre-Fight Txt</span><input class="input" value="${step.text}" onchange="updateObj(this,'text')"></div>
+                    `;
+
+                    // --- MIGRATION & RENDERING LOGIC ---
+                    if(!step.contents && step.enemies) { step.contents = step.enemies; delete step.enemies; }
+                    if(!step.contents) step.contents = [];
+
+                    let contentBox = document.createElement('div');
+                    contentBox.className = 'nested-list'; 
+                    contentBox.style.marginTop = "5px";
+                    stepDiv.appendChild(contentBox);
+
+                    renderList(contentBox, "Events", step.contents, T.dungeon_event, (evt) => {
+                        if(!evt.type) evt.type = 'enemy';
+
+                        let html = `
+                        <div style="margin-bottom: 4px; border-bottom: 1px solid #eee; padding-bottom: 4px;">
+                            <div class="form-group" style="margin-bottom:4px">
+                                <select class="input" style="font-weight:bold; color: #2b5797;" onchange="updateObj(this, 'type', true)">
+                                    <option value="enemy" ${evt.type==='enemy'?'selected':''}>⚔️ Enemy</option>
+                                    <option value="interaction" ${evt.type==='interaction'?'selected':''}>💬 Interaction</option>
+                                </select>
+                            </div>`;
+                        
+                        if(evt.type === 'enemy') {
+                            html += `
+                            <div style="display:flex; gap:5px">
+                                <input class="input" type="number" step="0.1" style="flex:1" value="${evt.weight}" placeholder="Wgt" title="Weight" onchange="updateObj(this, 'weight')">
+                                <select class="input" style="flex:3" onchange="updateObj(this, 'enemy')">
+                                    ${renderOpts(getDropdown('enemy'), evt.enemy)}
+                                </select>
+                            </div>`;
+                        } else {
+                            html += `
+                            <div class="form-group" style="margin-bottom:0">
+                                <select class="input" style="width:100%" onchange="updateObj(this, 'interaction_id')">
+                                    ${renderOpts(getDropdown('interaction'), evt.interaction_id)}
+                                </select>
+                            </div>`;
+                        }
+                        
+                        html += `</div>`;
+                        return html;
+                    });
+                });
+                return;
+            }
+
+            contentDiv.innerHTML = html;
+        });
+    }
+
+    function getContextSpeakers() {
+        if(!selectedPath) return ["Scene"];
+        let path = selectedPath.split(',');
+        if(path.length < 2) return ["Scene"];
+        let diagPath = path.slice(0, path.length - 2);
+        let diag = get(diagPath);
+        
+        let list = ["Scene"];
+        if(diag && diag.speakers) {
+            diag.speakers.forEach(s => list.push(s.name));
+        }
+        return list;
+    }
+
+    // ==========================================
+    // 5. UI UTILS & HANDLERS
+    // ==========================================
+
+    function inp(p, lbl, val, cb, type='text') {
+        let d = document.createElement('div'); d.className = 'form-group';
+        d.innerHTML = `<span class="label">${lbl}</span>`;
+        let i = document.createElement('input'); i.className = 'input'; i.type = type; i.value = val;
+        i.oninput = (e) => cb(e.target.value);
+        d.appendChild(i); p.appendChild(d);
+    }
+    
+    function sel(p, lbl, list, val, cb) {
+        let d = document.createElement('div'); d.className = 'form-group';
+        d.innerHTML = `<span class="label">${lbl}</span>`;
+        let s = document.createElement('select'); s.className = 'input';
+        s.innerHTML = renderOpts(list, val);
+        s.onchange = (e) => cb(e.target.value);
+        d.appendChild(s); p.appendChild(d);
+    }
+
+    function renderOpts(list, val) {
+        return list.map(o => `<option value="${o}" ${String(o)===String(val)?'selected':''}>${o}</option>`).join('');
+    }
+
+    function renderList(p, title, arr, tmpl, renderFn) {
+        if(!arr) arr = [];
+        let block = document.createElement('div'); block.className = 'block-list';
+        
+        let head = document.createElement('div'); head.className = 'block-head';
+        head.innerHTML = `<span>${title}</span> <button class="btn btn-primary" style="padding:0 5px" onclick="addToList(this)">+</button>`;
+        head.querySelector('button').onclick = () => { pushState(); arr.push(tmpl()); refresh(); };
+        block.appendChild(head);
+
+        if(title==="Options" && arr.length>0 ){
+                let header = document.createElement('div');
+                header.style.cssText = "display:flex; gap:5px; margin-top:10px; padding:0 15px 2px 10px; font-size:11px; font-weight:bold; color:#666;";
+                header.innerHTML = '<span style="flex:2">Text Option</span><span style="flex:1">Stored Value</span><span style="width:75px"></span>';
+                block.appendChild(header);
+        }else if(title==="Effects" && arr.length>0 ){
+                let header = document.createElement('div');
+                header.style.cssText = "display:flex; gap:5px; margin-top:10px; padding:0 15px 2px 10px; font-size:11px; font-weight:bold; color:#666;";
+                header.innerHTML = '<span style="flex:1">Subject</span><span style="flex:1">Effect</span><span style="width:75px"></span>';
+                block.appendChild(header);
+        }
+
+        arr.forEach((item, i) => {
+            let row = document.createElement('div'); row.className = 'block-row';
+            row.ref = item; row.arr = arr; 
+            
+            let upDisabled = i === 0 ? 'disabled style="opacity:0.3"' : '';
+            let downDisabled = i === arr.length - 1 ? 'disabled style="opacity:0.3"' : '';
+
+            let contentDiv = document.createElement('div');
+            let result = renderFn(item, contentDiv);
+            if(typeof result === 'string') contentDiv.innerHTML = result;
+            row.appendChild(contentDiv);
+
+            let ctrls = document.createElement('div'); ctrls.className = 'row-controls';
+            ctrls.innerHTML = `
+                <button class="btn-mini" ${upDisabled} onclick="moveItem(this, ${i}, -1)">↑</button>
+                <button class="btn-mini" ${downDisabled} onclick="moveItem(this, ${i}, 1)">↓</button>
+                <button class="btn-mini btn-del" onclick="delList(this, ${i})">×</button>
+            `;
+            row.appendChild(ctrls);
+            block.appendChild(row);
+        });
+        p.appendChild(block);
+    }
+
+    window.popInspector = () => {
+        inspectorStack.pop();
+        renderInspector();
+    }
+
+    window.refresh = () => {
+        renderInspector();
+        renderTree();
+    }
+
+    window.updateObj = (el, key, triggerRefresh) => {
+        pushState();
+        let row = el.closest('.block-row');
+        let obj = row.ref;
+        if(key.includes('.')) {
+            let keys = key.split('.');
+            obj[keys[0]][keys[1]] = el.value;
+        } else {
+            obj[key] = el.value;
+        }
+        if(triggerRefresh) refresh();
+    }
+
+    window.delList = (btn, idx) => {
+        pushState(); // <--- ADDED
+        let row = btn.closest('.block-row');
+        row.arr.splice(idx, 1);
+        refresh();
+    }
+
+    window.moveTreeItemByPath = (pathStr, direction) => {
+        pushState();
+        let pathArr = pathStr.split(',');
+        let index = parseInt(pathArr.pop()); 
+        let parentArr = get(pathArr); 
+        let targetIdx = index + direction;
+        if (targetIdx >= 0 && targetIdx < parentArr.length) {
+            let temp = parentArr[index];
+            parentArr[index] = parentArr[targetIdx];
+            parentArr[targetIdx] = temp;
+            pathArr.push(targetIdx); 
+            selectedPath = pathArr.join(',');
+            refresh();
+        }
+    }
+
+    window.deleteTreeItemByPath = (pathStr) => {
+        if(!confirm("Delete this item?")) return;
+        pushState();
+        let path = pathStr.split(',');
+        let idx = path.pop();
+        let p = get(path);
+        p.splice(idx, 1);
+        selectedPath = null; 
+        inspectorStack = [];
+        refresh();
+    }
+
+    // ==========================================
+    // 6. CONTEXT MENU
+    // ==========================================
+    const ctx = document.getElementById('ctx');
+    
+    function showCtx(e, type, path, childType) {
+        e.preventDefault(); e.stopPropagation();
+        ctx.innerHTML = '';
+        ctx.style.display = 'block';
+        ctx.style.left = e.pageX + 'px'; ctx.style.top = e.pageY + 'px';
+        
+        let opts = [];
+
+        if(type==='root') {
+            opts = [
+                ['Add Variable', 'variable'], ['Add Dialogue', 'dialogue'], ['Add Interaction', 'interaction'],
+                ['Add Item', 'item'], ['Add Enemy', 'enemy'], ['Add Follower', 'follower']
+            ];
+        } 
+        else if (type==='folder') {
+            opts = [[`Add Item`, childType]];
+        } 
+        else {
+            opts.push(['Move Up', 'move_up']);
+            opts.push(['Move Down', 'move_down']);
+            opts.push(['Duplicate', 'dup']);
+            opts.push(['Delete', 'del']); 
+        }
+
+        opts.forEach(o => {
+            let d = document.createElement('div'); d.className='ctx-item'; d.innerText=o[0];
+            if(o[1].includes('move')) d.style.fontSize = '0.9em';
+            if(o[1] === 'del') d.style.color = 'red';
+            d.onclick = () => ctxAct(o[1], path.join(','));
+            ctx.appendChild(d);
+        });
+    }
+
+    window.ctxAct = (action, pathStr) => {
+        ctx.style.display = 'none';
+        
+        // Handle Tree Movement / Deletion (These functions have their own pushState, so we don't add it here)
+        if(action === 'move_up') { moveTreeItemByPath(pathStr, -1); return; }
+        if(action === 'move_down') { moveTreeItemByPath(pathStr, 1); return; }
+        if(action === 'del') { deleteTreeItemByPath(pathStr); return; } 
+        
+        // Handle Duplicate (Has its own pushState if you updated it below, otherwise add it inside duplicateTreeItemByPath)
+        if(action === 'dup') { duplicateTreeItemByPath(pathStr); return; }
+
+        // Handle Adding Items
+        pushState();
+        let path = pathStr ? pathStr.split(',') : [];
+        let t = get(path); 
+        let newItem = T[action]();
+        
+        let inserted = false;
+        if (selectedPath && selectedPath.startsWith(pathStr + ',')) {
+            let relativePath = selectedPath.substring(pathStr.length + 1);
+            if (!relativePath.includes(',')) {
+                let idx = parseInt(relativePath);
+                if (!isNaN(idx)) {
+                    t.splice(idx + 1, 0, newItem);
+                    selectedPath = pathStr + "," + (idx + 1);
+                    inserted = true;
+                }
+            }
+        }
+        if (!inserted) {
+            t.push(newItem);
+            selectedPath = pathStr + "," + (t.length - 1);
+        }
+        refresh();
+    }
+
+    document.onclick = () => ctx.style.display = 'none';
+
+    // ==========================================
+    // 7. IMPORTER ENGINE
+    // ==========================================
+
+    function importJS(input) {
+        const file = input.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                processImport(e.target.result);
+                renderTree();
+                //alert("Import Successful!");
+                window.collapseAll();
+            } catch (err) {
+                console.error(err);
+                alert("Import Failed: " + err.message);
+            }
+        };
+        reader.readAsText(file);
+        input.value = ''; // Reset
+    }
+
+    function processImport(scriptContent) {
+        // 1. Reset Registry & State
+        registry = [];
+        collapsedPaths = new Set();
+        selectedPath = null;
+        
+        const varToNameMap = {};
+        const importedDialogues = new Map();
+
+        // 2. Mock Environment
+        class Skills {
+            constructor(str, def, vit, agi, min=0, wc=0, sm=0) {
+                this.strength = str || 0; this.defense = def || 0; this.vitality = vit || 0;
+                this.agility = agi || 0; this.mining = min || 0; this.woodcutting = wc || 0; this.smithing = sm || 0;
+            }
+        }
+
+        class Enemy {
+            constructor(name, hp, loots, skills) {
+                let node = T.enemy();
+                node.name = name;
+                node.hp = hp; node.maxHp = hp;
+                node.skills = skills || T.skills();
+                varToNameMap[name.replace(/[^a-zA-Z0-9]/g, '_')] = name;
+
+                if(loots) {
+                    Object.entries(loots).forEach(([k, v]) => {
+                        node.loots.push({ item: k, chance: v });
+                    });
+                }
+                registry.push(node);
+                return node;
+            }
+        }
+
+        const GLOBAL_STATE = { variables: {} };
+        const ITEM_DEFINITIONS = {};
+        const FOLLOWER_DEFINITIONS = {};
+        
+        const mockAssign = (target, source) => {
+            if (!source) return target;
+            Object.assign(target, source);
+
+            if (target === ITEM_DEFINITIONS) {
+                Object.entries(source).forEach(([key, val]) => {
+                    let node = T.item();
+                    node.name = key;
+                    if(val.is_weapon) node.is_weapon = true;
+                    if(val.is_armor_body) node.is_armor_body = true;
+                    if(val.is_armor_leggings) node.is_armor_leggings = true;
+                    if(val.bonus_hp) node.bonus_hp = val.bonus_hp;
+                    if(val.scaling) node.scaling = val.scaling;
+                    if(val.bonus_skills) node.bonus_skills = val.bonus_skills;
+                    registry.push(node);
+                });
+            }
+
+            if (target === FOLLOWER_DEFINITIONS) {
+                Object.entries(source).forEach(([key, val]) => {
+                    let node = T.follower();
+                    node.name = key;
+                    node.hp = val.hp || 100; node.maxHp = val.hp || 100;
+                    if(val.interaction) node.interaction_id = val.interaction;
+                    if(val.skills) node.skills = val.skills;
+                    registry.push(node);
+                });
+            }
+
+            if (target === GLOBAL_STATE.variables) {
+                Object.entries(source).forEach(([key, val]) => {
+                    let node = T.variable();
+                    node.name = key;
+                    node.value = String(val);
+                    registry.push(node);
+                });
+            }
+            return target;
+        };
+
+        const importDialogue = (obj, suggestedName) => {
+            if (importedDialogues.has(obj)) return importedDialogues.get(obj);
+            let d = T.dialogue();
+            d.name = suggestedName;
+            d.background = obj.background || "";
+            if(obj.speakers) {
+                Object.entries(obj.speakers).forEach(([k, v]) => { d.speakers.push({ name: k, sprite: v[0], position: v[1] }); });
+            }
+            if(obj.data) {
+                obj.data.forEach(line => {
+                    let row = T.entry_dialogue();
+                    row.type = line[0]; row.speaker = line[1]; row.text = line[2];
+                    if(line[3]) {
+                        line[3].forEach(effStr => {
+                            let parts = effStr.split(':');
+                            let eff = T.effect();
+                            eff.subject = parts[0]; eff.effect = parts[1];
+                            if(parts.length > 2) eff.params = parts[2];
+                            row.effect.push(eff);
+                        });
+                    }
+                    if(line[4]) {
+                        Object.entries(line[4]).forEach(([txt, val]) => {
+                            let opt = T.option();
+                            opt.text = txt; opt.value = val;
+                            row.options.push(opt);
+                        });
+                    }
+                    d.data.push(row);
+                });
+            }
+            registry.push(d);
+            importedDialogues.set(obj, d.name);
+            return d.name;
+        };
+
+        const resolveDialogue = (val, contextId) => {
+            if (!val) return "null";
+            if (typeof val === 'string') return val;
+            if (typeof val === 'object') {
+                if (val.name) return val.name; 
+                return importDialogue(val, contextId + "_dlg_" + Math.floor(Math.random()*1000));
+            }
+            return "null";
+        };
+
+        const resolveName = (target, fallback) => {
+            if (target && typeof target === 'object' && target.name) return target.name;
+            if (typeof target === 'string') return varToNameMap[target] || target;
+            return fallback;
+        };
+
+        const AppendIntRegEntry = (id, list) => {
+            let node = T.interaction();
+            node.name = id;
+            list.forEach(entry => {
+                if (entry.condition && entry.condition !== 'default') {
+                    let conds = Array.isArray(entry.condition) ? entry.condition : [entry.condition];
+                    conds.forEach(c => {
+                        let cNode = T.entry_condition();
+                        if(c.type === 'item') { cNode.type='item'; cNode.item=c.id; cNode.op=c.op; cNode.amount=c.val; }
+                        else if(c.type === 'follower') { cNode.type='follower'; cNode.name=c.id; cNode.in_party=String(c.in_party); }
+                        else if(c.var) { cNode.type='var'; cNode.var=c.var; cNode.op=c.op; cNode.value=String(c.val); }
+                        node.condition.push(cNode);
+                    });
+                }
+                
+                let d = entry.data || {};
+                
+                // === FIX START: If data is empty, do not add a sequence node ===
+                if (Object.keys(d).length === 0) return;
+                // === FIX END ===
+
+                let flowNode = T.entry_interaction();
+                if(d.log_only) flowNode.log_only = d.log_only;
+                if(d.dialogue) flowNode.dialogue = resolveDialogue(d.dialogue, id);
+                if(d.binding) flowNode.binding = d.binding;
+                if(d.on_finish) {
+                    let of = d.on_finish;
+                    flowNode.on_finish.check_var = of.check_var || "null";
+                    if(of.switch_case) {
+                        Object.entries(of.switch_case).forEach(([val, res]) => {
+                            let sc = T.switch_case();
+                            sc.value = val;
+                            sc.result.dialogue = resolveDialogue(res.dialogue, id + "_res_" + val);
+                            if(res.actions) sc.result.actions = importActions(res.actions);
+                            flowNode.on_finish.switch_case.push(sc);
+                        });
+                    }
+                    if(of.actions) flowNode.on_finish.actions = importActions(of.actions);
+                }
+                node.data.push(flowNode);
+            });
+            registry.push(node);
+        };
+
+        const importActions = (actList) => {
+            if(!actList) return [];
+            return actList.map(a => {
+                let act = T.action();
+                act.type = a.type;
+                if(a.type === 'set_state') { act.key = a.key; act.value = String(a.val); }
+                if(a.type === 'goto') { act.target = a.target; }
+                if(a.type === 'log') { act.text = a.text; }
+                if(a.type === 'consume' || a.type === 'reward') { act.item = a.item || a.id; act.amount = a.count || a.amount; }
+                if(a.type === 'interaction') { act.id = a.id; }
+                if(a.type === 'fight') {
+                    act.text = a.text; act.binding = a.binding || "null"; act.next = a.next || "null";
+                    if(a.enemy) Object.entries(a.enemy).forEach(([name, arr]) => {
+                        let realName = resolveName(arr[1], name);
+                        act.enemy.push({ weight: arr[0], enemy: realName });
+                    });
+                }
+                return act;
+            });
+        }
+
+        // 3. EXECUTE SCRIPT
+        try {
+            const runner = new Function(
+                'Skills', 'Enemy', 'GLOBAL_STATE', 'ITEM_DEFINITIONS', 
+                'FOLLOWER_DEFINITIONS', 'Object', 'AppendIntRegEntry',
+                scriptContent + "\n\nreturn typeof WORLD_MAP !== 'undefined' ? WORLD_MAP : null;"
+            );
+            
+            const resultMap = runner(
+                Skills, Enemy, GLOBAL_STATE, ITEM_DEFINITIONS, 
+                FOLLOWER_DEFINITIONS, { assign: mockAssign }, AppendIntRegEntry
+            );
+
+            if (!resultMap) throw new Error("WORLD_MAP not found in script.");
+
+            // 4. PARSE WORLD MAP
+            const parseScene = (mapObj, parentName) => {
+                if(!mapObj) return;
+
+                Object.keys(mapObj).forEach(k => {
+                    if(k.startsWith("return")) return;
+
+                    let parts = k.split(';');
+                    let defs = parts[0].split(':');
+                    
+                    let node = T.scene();
+                    node.type = defs[0];
+                    node.name = defs[1] || "unknown";    
+                    node.text = defs[2] || node.name;         
+                    node.background = defs[3] || ""; 
+                    node.parent = parentName;
+
+                    for(let i=1; i<parts.length; i++) {
+                        let p = parts[i].trim().split(':');
+                        if(p[0] === 'fn_interaction') node.interactions.push({ id: p[1] });
+                        if(p[0] === 'fn_condition') node.conditions.push({ id: p[1] });
+                    }
+                    
+                    let val = mapObj[k];
+                    
+                    // === CASE 1: DUNGEON (Sequence Array) ===
+                    if (node.type === 'dungeon' && Array.isArray(val)) {
+                        val.forEach(stepArr => {
+                            if(Array.isArray(stepArr)) {
+                                let step = T.dungeon_step();
+                                
+                                // CASE A: Interaction Step (Array of 1 string: ["fn_interaction:xyz"])
+                                if (stepArr.length === 1 && typeof stepArr[0] === 'string' && stepArr[0].startsWith('fn_interaction:')) {
+                                    step.is_interaction = true; // Set flag
+                                    step.interaction_id = stepArr[0].replace('fn_interaction:', '');
+                                    step.delay = 0;
+                                    step.text = "";
+                                } 
+                                // CASE B: Enemy Step (Standard format: [delay, text, {enemies}])
+                                else {
+                                    step.is_interaction = false;
+                                    step.delay = stepArr[0];
+                                    step.text = stepArr[1];
+                                    step.contents = [];
+                                    
+                                    if(stepArr[2]) {
+                                        Object.entries(stepArr[2]).forEach(([cKey, cVal]) => {
+                                            let evt = T.dungeon_event();
+                                            let realName = resolveName(cVal[1], cKey);
+                                            evt.type = "enemy"; 
+                                            evt.enemy = realName;
+                                            evt.weight = cVal[0];
+                                            step.contents.push(evt);
+                                        });
+                                    }
+                                }
+                                node.dungeon_sequence.push(step);
+                            }
+                        });
+                    }
+                    // === CASE 2: REGULAR ACTION (Delay, Text, Data) ===
+                    else if (Array.isArray(val)) {
+                        node.delay = val[0];
+                        node.action_text = val[1];
+
+                        if(node.type === 'craft' || node.type === 'harvest') {
+                            if(val[2]) Object.entries(val[2]).forEach(([ik, amt]) => {
+                                if(ik.startsWith("input:")) node.craft_inputs.push({ item: ik.split(':')[1], amount: amt});
+                                else if(ik.startsWith("output:")) node.craft_outputs.push({ item: ik.split(':')[1], amount: amt});
+                                else node.harvest_items.push({ item: ik, amount: amt});
+                            });
+                            if(val[3]) Object.entries(val[3]).forEach(([sk, amt]) => node.exp_rewards.push({ skill: sk, amount: amt }));
+                        }
+                        else if(node.type === 'fight') {
+                            if(val[2]) Object.entries(val[2]).forEach(([enmId, eArr]) => {
+                                let realName = resolveName(eArr[1], enmId);
+                                node.enemy_list.push({ weight: eArr[0], enemy: realName });
+                            });
+                        }
+                    } 
+                    // === CASE 3: NESTED SCENE ===
+                    else if (val && typeof val === 'object') {
+                        node.no_return = !Object.keys(val).some(ck => ck.startsWith('return'));
+                        parseScene(val, node.name); 
+                    } else {
+                        node.no_return = true; 
+                        node.interaction_only = true;
+                    }
+                    registry.push(node);
+                });
+            };
+
+            parseScene(resultMap, "top");
+
+        } catch(e) {
+            console.error("Execution Error", e);
+            throw e;
+        }
+    }
+    window.exportJS = () => {
+        let output = "";
+        
+        // 1. Helpers
+        const sanitizeVar = (name) => {
+            if (name === null || name === undefined) return "null";
+            return String(name).replace(/[^a-zA-Z0-9]/g, '_');
+        };
+        const markVar = (name) => `@@VAR@@${sanitizeVar(name)}@@`;
+        const fmtSkills = (s) => `new Skills(${s.strength}, ${s.defense}, ${s.vitality}, ${s.agility}, ${s.mining}, ${s.woodcutting}, ${s.smithing})`;
+
+        // --- 2. Variables ---
+        output += "// :::::: Variables ::::::::::::::::::::::::::::::::::::::::::::::::::\n\n";
+        let vars = registry.filter(i => i.value !== undefined && i.name && i.parent === undefined);
+        if (vars.length > 0) {
+            output += "Object.assign(GLOBAL_STATE.variables, {\n";
+            vars.forEach(v => { output += `    "${v.name}": "${v.value}",\n`; });
+            output += "});\n\n";
+        }
+
+        // --- 3. Items ---
+        output += "// :::::: Items ::::::::::::::::::::::::::::::::::::::::::::::::::::::\n\n";
+        let items = registry.filter(i => i.is_weapon !== undefined);
+        if (items.length > 0) {
+            output += "Object.assign(ITEM_DEFINITIONS, {\n";
+            items.forEach(i => {
+                output += `    "${i.name}": { `;
+                if (i.is_weapon) output += `is_weapon: true, `;
+                if (i.is_armor_body) output += `is_armor_body: true, `;
+                if (i.is_armor_leggings) output += `is_armor_leggings: true, `;
+                if (i.bonus_hp) output += `bonus_hp: ${i.bonus_hp}, `;
+                if (i.scaling) output += `scaling: "${i.scaling}", `;
+                output += `bonus_skills: ${fmtSkills(i.bonus_skills)} },\n`;
+            });
+            output += "});\n\n";
+        }
+
+        // --- 4. Enemies ---
+        output += "// :::::: Enemies ::::::::::::::::::::::::::::::::::::::::::::::::::::\n\n";
+        registry.filter(i => i.loots !== undefined).forEach(e => {
+            let lootObj = "{ " + e.loots.map(l => `"${l.item}": ${l.chance}`).join(", ") + " }";
+            output += `const ${sanitizeVar(e.name)} = new Enemy("${e.name}", ${e.hp}, ${lootObj}, ${fmtSkills(e.skills)});\n`;
+        });
+        output += "\n";
+
+        // --- 5. Followers ---
+        let followers = registry.filter(i => i.interaction_id !== undefined);
+        if (followers.length > 0) {
+            output += "Object.assign(FOLLOWER_DEFINITIONS, {\n";
+            followers.forEach(f => {
+                output += `    "${f.name}": { hp: ${f.hp}, skills: ${fmtSkills(f.skills)}, interaction: "${f.interaction_id}" },\n`;
+            });
+            output += "});\n\n";
+        }
+
+        // --- 6. Dialogues ---
+        output += "// :::::: Dialogues ::::::::::::::::::::::::::::::::::::::::::::::::::\n\n";
+        registry.filter(i => i.speakers !== undefined).forEach(d => {
+            output += `const ${sanitizeVar(d.name)} = ${JSON.stringify(serializeDialogue(d), null, 4)};\n\n`;
+        });
+
+        function serializeDialogue(d) {
+            let obj = { background: d.background, speakers: {}, data: [] };
+            d.speakers.forEach(s => { obj.speakers[s.name] = [s.sprite, s.position]; });
+            d.data.forEach(line => {
+                let row = [line.type, line.speaker, line.text];
+                let effects = line.effect.map(e => `${e.subject}:${e.effect}${e.params ? ':' + e.params : ''}`);
+                row.push(effects);
+                if (line.type === 'question') {
+                    let opts = {};
+                    line.options.forEach(o => { opts[o.text] = o.value; });
+                    row.push(opts);
+                }
+                obj.data.push(row);
+            });
+            return obj;
+        }
+
+        // --- 7. Interactions ---
+        output += "// :::::: Interaction Registry ::::::::::::::::::::::::::::::::::::::\n\n";
+        registry.filter(i => i.condition !== undefined && i.name).forEach(int => {
+            let entries = int.data.map(flow => {
+                let entry = { condition: "default", data: {} };
+                if (int.condition.length > 0) {
+                    entry.condition = int.condition.map(c => {
+                        if (c.type === 'var') return { var: c.var, op: c.op, val: c.value };
+                        if (c.type === 'item') return { type: 'item', id: c.item, op: c.op, val: c.amount };
+                        if (c.type === 'follower') return { type: 'follower', id: c.name, in_party: (c.in_party === true || c.in_party === "true") };
+                    });
+                    if (entry.condition.length === 1) entry.condition = entry.condition[0];
+                }
+                if (flow.log_only) entry.data.log_only = flow.log_only;
+                
+                if (flow.dialogue && flow.dialogue !== "null") {
+                    entry.data.dialogue = markVar(flow.dialogue);
+                }
+                
+                if (flow.binding !== "null") entry.data.binding = flow.binding;
+                if (flow.on_finish && (flow.on_finish.check_var !== "null" || flow.on_finish.actions.length > 0 || (flow.on_finish.switch_case && flow.on_finish.switch_case.length > 0))) {
+                    entry.data.on_finish = { actions: serializeActions(flow.on_finish.actions) };
+                    if (flow.on_finish.check_var !== "null") {
+                        entry.data.on_finish.check_var = flow.on_finish.check_var;
+                        entry.data.on_finish.switch_case = {};
+                        flow.on_finish.switch_case.forEach(sc => {
+                            let resObj = { actions: serializeActions(sc.result.actions) };
+                            if (sc.result.dialogue && sc.result.dialogue !== "null") {
+                                resObj.dialogue = markVar(sc.result.dialogue);
+                            }
+                            entry.data.on_finish.switch_case[sc.value] = resObj;
+                        });
+                    }
+                }
+                return entry;
+            });
+
+            let jsonStr = JSON.stringify(entries, null, 4);
+            let unquotedJson = jsonStr.replace(/"@@VAR@@(.*?)@@"/g, '$1');
+            output += `AppendIntRegEntry("${int.name}", ${unquotedJson});\n\n`;
+        });
+
+        function serializeActions(acts) {
+            if (!acts) return [];
+            return acts.map(a => {
+                let res = { type: a.type };
+                if (a.type === 'set_state') { res.key = a.key; res.val = String(a.value); }
+                if (a.type === 'goto') res.target = a.target;
+                if (a.type === 'log') res.text = a.text;
+                if (a.type === 'consume' || a.type === 'reward') { res.item = a.item; res.count = parseInt(a.amount); }
+                if (a.type === 'interaction') res.id = a.id;
+                if (a.type === 'fight') {
+                    res.text = a.text; res.binding = a.binding; res.next = a.next;
+                    res.enemy = {}; 
+                    if (a.enemy) {
+                        a.enemy.forEach(e => { 
+                            if (e.enemy) {
+                                res.enemy[e.enemy] = [parseFloat(e.weight), markVar(e.enemy)]; 
+                            }
+                        });
+                    }
+                }
+                return res;
+            });
+        }
+
+        // --- 8. Maps ---
+        output += "// :::::: Maps :::::::::::::::::::::::::::::::::::::::::::::::::::::::\n\n";
+        let scenes = registry.filter(i => i.parent !== undefined);
+        const buildMap = (parentName) => {
+            let obj = {};
+            scenes.filter(s => s.parent === parentName).forEach(s => {
+                let iconPart = s.background ? `:${s.background}` : "";
+                let key = `${s.type}:${s.name}:${s.text}${iconPart}`;
+                s.interactions.forEach(id => { key += `; fn_interaction:${id.id}`; });
+                s.conditions.forEach(id => { key += `; fn_condition:${id.id}`; });
+                
+                let val = null;
+                if (s.interaction_only) {
+                    val = null;
+                } else if (['craft', 'harvest', 'fight'].includes(s.type)) {
+                    val = [parseInt(s.delay), s.action_text];
+                    let dataObj = {};
+                    if (s.type === 'craft') {
+                        s.craft_inputs.forEach(i => dataObj[`input:${i.item}`] = i.amount);
+                        s.craft_outputs.forEach(i => dataObj[`output:${i.item}`] = i.amount);
+                    } else if (s.type === 'harvest') {
+                        s.harvest_items.forEach(i => dataObj[i.item] = i.amount);
+                    } else if (s.type === 'fight') {
+                        s.enemy_list.forEach(e => {
+                            if (e.enemy) dataObj[e.enemy] = [parseFloat(e.weight), markVar(e.enemy)];
+                        });
+                    }
+                    val.push(dataObj);
+                    if (s.exp_rewards.length > 0) {
+                        let expObj = {}; s.exp_rewards.forEach(er => expObj[er.skill] = er.amount);
+                        val.push(expObj);
+                    }
+                } else if (s.type === 'dungeon') {
+                    val = []; 
+                    s.dungeon_sequence.forEach(step => {
+                        // CASE A: Interaction
+                        if (step.is_interaction) {
+                            val.push([`fn_interaction:${step.interaction_id}`]);
+                        } 
+                        // CASE B: Enemies
+                        else {
+                            let stepEvts = {};
+                            if (step.contents) {
+                                step.contents.forEach(evt => { 
+                                    if (evt.enemy && evt.enemy !== "null") {
+                                        stepEvts[evt.enemy] = [parseFloat(evt.weight), markVar(evt.enemy)]; 
+                                    }
+                                });
+                            }
+                            val.push([parseInt(step.delay), step.text, stepEvts]);
+                        }
+                    });
+                    return obj[key] = val;
+                } else {
+                    // Return Node first
+                    val = {};
+                    if (!s.no_return) {
+                        val["return:return:🔙 Exit:icon.png"] = {};
+                    }
+                    Object.assign(val, buildMap(s.name));
+                }
+                obj[key] = val;
+            });
+            return obj;
+        };
+
+        let worldMapStr = JSON.stringify(buildMap("top"), null, 4);
+        let unquotedWorldMap = worldMapStr.replace(/"@@VAR@@(.*?)@@"/g, '$1');
+        
+        output += `let WORLD_MAP = ${unquotedWorldMap};\n`;
+
+        const blob = new Blob([output], { type: "text/javascript" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "data.js";
+        link.click();
+    };
+
+    // ==========================================
+    // 8. KEYBOARD NAVIGATION
+    // ==========================================
+    document.addEventListener('keydown', (e) => {
+        // 1. Stop if user is typing in an input field
+        if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+
+        // 2. Only handle ArrowUp / ArrowDown
+        if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+
+        e.preventDefault(); // Prevent default browser scrolling
+
+        // 3. Get all visible tree nodes in visual order
+        const nodes = Array.from(document.querySelectorAll('#treeRoot .node'));
+        if (nodes.length === 0) return;
+
+        // 4. Find currently selected index
+        const currentIndex = nodes.findIndex(n => n.classList.contains('selected'));
+        let targetIndex = -1;
+
+        if (e.key === 'ArrowUp') {
+            // Move up (or stay at top)
+            targetIndex = currentIndex > 0 ? currentIndex - 1 : 0;
+        } else if (e.key === 'ArrowDown') {
+            // Move down (or select first item if nothing selected)
+            targetIndex = currentIndex < nodes.length - 1 ? currentIndex + 1 : (currentIndex === -1 ? 0 : nodes.length - 1);
+        }
+
+        // 5. Trigger selection and scroll
+        if (targetIndex !== -1 && targetIndex !== currentIndex) {
+            // Simulate a click on the target node
+            // This triggers selectPath(), which calls renderTree(), causing the DOM to refresh
+            nodes[targetIndex].click(); 
+
+            // Because the DOM just refreshed, the 'nodes' array references dead elements.
+            // We must query the DOM again to find the *new* selected element to scroll to it.
+            setTimeout(() => {
+                const newSelected = document.querySelector('#treeRoot .node.selected');
+                if(newSelected) {
+                    newSelected.scrollIntoView({ block: 'nearest' });
+                }
+            }, 0);
+        }
+    });
+
+    // ==========================================
+    // LOCAL STORAGE & SHORTCUTS
+    // ==========================================
+
+    window.saveLocal = () => {
+        try {
+            localStorage.setItem(CACHE_KEY, JSON.stringify(registry));
+            
+            // Visual Feedback
+            const btn = document.querySelector('button[onclick="saveLocal()"]');
+            const originalText = btn.innerText;
+            btn.innerText = "✅ Saved!";
+            setTimeout(() => btn.innerText = originalText, 1000);
+        } catch(e) {
+            alert("Failed to save to cache (Quota exceeded?)");
+        }
+    };
+
+    window.clearLocal = () => {
+        if(confirm("Are you sure? This will delete your cached save and reset to defaults.")) {
+            localStorage.removeItem(CACHE_KEY);
+            location.reload();
+        }
+    };
+
+    // Ctrl+S Listener
+    document.addEventListener('keydown', (e) => {
+        // Check for Ctrl+S or Cmd+S (Mac)
+        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+            e.preventDefault(); // Prevent browser "Save Page As"
+            saveLocal();
+        }
+    });
+
+    // ==========================================
+    // DUPLICATION LOGIC (Ctrl+D)
+    // ==========================================
+
+    window.duplicateItem = () => {
+        if (!selectedPath) return;
+
+        pushState();
+
+        // 1. Identify Parent Array and Index
+        let pathArr = selectedPath.split(',');
+        let currentIndex = parseInt(pathArr.pop());
+        
+        // If pathArr is empty, we are at the root 'registry', otherwise use 'get'
+        let parentArr = (pathArr.length === 0) ? registry : get(pathArr);
+
+        if (!parentArr || currentIndex === undefined) return;
+
+        // 2. Deep Clone
+        // We use JSON parse/stringify for a clean deep copy without references
+        let original = parentArr[currentIndex];
+        let clone = JSON.parse(JSON.stringify(original));
+
+        // 3. Rename (Optional UX)
+        if (clone.name) clone.name += "_copy";
+
+        // 4. Insert immediately after original
+        let newIndex = currentIndex + 1;
+        parentArr.splice(newIndex, 0, clone);
+
+        // 5. Update Selection to the new copy
+        pathArr.push(newIndex);
+        selectedPath = pathArr.join(',');
+
+        // 6. Refresh and Scroll
+        refresh();
+        setTimeout(() => {
+            const node = document.querySelector('.node.selected');
+            if (node) node.scrollIntoView({ block: "nearest" });
+        }, 50);
+    };
+
+    // Listen for Ctrl+D
+    document.addEventListener('keydown', (e) => {
+        // Check for Ctrl+D (or Cmd+D on Mac)
+        if ((e.ctrlKey || e.metaKey) && (
+                e.key === 'd' || e.key === 'D' || e.key === 'c' || e.key === 'C')) {
+            e.preventDefault(); // Prevent browser bookmark shortcut
+            duplicateItem();
+        }
+    });
+
+    window.duplicateTreeItemByPath = (pathStr) => {
+        pushState();
+        let pathArr = pathStr.split(',');
+        let index = parseInt(pathArr.pop());
+        
+        // Handle root vs nested arrays
+        let parentArr = (pathArr.length === 0) ? registry : get(pathArr);
+        
+        // 1. Deep Clone
+        let clone = JSON.parse(JSON.stringify(parentArr[index]));
+        if(clone.name) clone.name += "_copy";
+        
+        // 2. Insert Immediately After
+        parentArr.splice(index + 1, 0, clone);
+        
+        // 3. Select the New Item
+        pathArr.push(index + 1);
+        selectedPath = pathArr.join(',');
+        
+        refresh();
+    }
+
+    // ==========================================
+    // UNDO / REDO SYSTEM
+    // ==========================================
+    
+    let undoStack = [];
+    let redoStack = [];
+    const MAX_HISTORY = 50;
+
+    window.pushState = () => {
+        // Save Registry AND Selection
+        const snapshot = {
+            registry: JSON.parse(JSON.stringify(registry)),
+            selection: selectedPath
+        };
+        
+        undoStack.push(snapshot);
+        if(undoStack.length > MAX_HISTORY) undoStack.shift();
+        
+        // Clear Redo stack whenever a new action happens
+        redoStack = [];
+    };
+
+    window.undo = () => {
+        if(undoStack.length === 0) return;
+        
+        // Save current state to Redo Stack
+        const currentSnapshot = {
+            registry: JSON.parse(JSON.stringify(registry)),
+            selection: selectedPath
+        };
+        redoStack.push(currentSnapshot);
+        
+        // Restore previous state
+        const prev = undoStack.pop();
+        registry = prev.registry;
+        selectedPath = prev.selection;
+        
+        refresh();
+    };
+
+    window.redo = () => {
+        if(redoStack.length === 0) return;
+        
+        // Save current state to Undo Stack (so we can undo the redo)
+        const currentSnapshot = {
+            registry: JSON.parse(JSON.stringify(registry)),
+            selection: selectedPath
+        };
+        undoStack.push(currentSnapshot);
+        
+        // Restore redo state
+        const next = redoStack.pop();
+        registry = next.registry;
+        selectedPath = next.selection;
+        
+        refresh();
+    };
+
+    // Keyboard Shortcuts for Undo/Redo
+    document.addEventListener('keydown', (e) => {
+        // Ctrl+Z
+        if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
+            e.preventDefault();
+            undo();
+        }
+        // Ctrl+Shift+Z or Ctrl+Y (Redo)
+        if ((e.ctrlKey || e.metaKey) && ((e.shiftKey && (e.key === 'z' || e.key === 'Z')) || (e.key === 'y' || e.key === 'Y'))) {
+            e.preventDefault();
+            redo();
+        }
+    });
+
+    // Init
+    renderTree();
+
+</script>
+</body>
+</html>
