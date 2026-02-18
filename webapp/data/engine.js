@@ -32,8 +32,25 @@ function dictDrawMultiple(dct) {
     }
     return items;
 }
-function createFloatingTextPlaceholder(filename, extraClasses = "") { const div = document.createElement('div'); div.className = `missing-asset-placeholder ${extraClasses}`; div.innerText = `FILE NOT FOUND:\n${filename}`; return div; }
-function safelySetBackgroundImage(containerId, imgId, basePath, filename) { const container = document.getElementById(containerId); const img = document.getElementById(imgId); img.style.display = 'block'; const existingPlaceholder = container.querySelector('.missing-asset-placeholder'); if (existingPlaceholder) container.removeChild(existingPlaceholder); img.onerror = function() { this.style.display = 'none'; container.appendChild(createFloatingTextPlaceholder(filename)); }; img.src = basePath + filename; }
+function createFloatingTextPlaceholder(filename, extraClasses = "") {
+    const div = document.createElement('div');
+    div.className = `missing-asset-placeholder ${extraClasses}`;
+    div.innerText = `FILE NOT FOUND:\n${filename}`;
+    return div;
+}
+function safelySetBackgroundImage(containerId, imgId, basePath, filename) {
+    const container = document.getElementById(containerId);
+    const img = document.getElementById(imgId);
+    img.style.display = 'block';
+    const existingPlaceholder = container.querySelector('.missing-asset-placeholder');
+    if (existingPlaceholder)
+        container.removeChild(existingPlaceholder);
+    img.onerror = function() {
+        this.style.display = 'none';
+        container.appendChild(createFloatingTextPlaceholder(filename));
+    };
+    img.src = basePath + filename;
+}
 
 // --- Math function ---
 function landing_chance(agility_diff){
@@ -174,7 +191,7 @@ class CharacterMenu {
     addFollower(name) {
         const def = FOLLOWER_DEFINITIONS[name];
         if(def) {
-            this.followers.push(new Follower(name, def.hp, def.skills, def.interaction));
+            this.followers.push(new Follower(name, def.hp, def.skills, def.interaction, def.sprite));
             Game.log(`${name} joined the party!`);
         }
     }
@@ -318,6 +335,7 @@ class CharacterMenu {
             ${closeBtn}</div>`;
     }}
 // --- SCENE FUNCTIONS ---
+// --- SCENE FUNCTIONS ---
 const SceneFunctions = {
     fn_interaction: function(next, interactionId) {
         const rules = INTERACTION_REGISTRY[interactionId];
@@ -363,6 +381,16 @@ const SceneFunctions = {
                         Game.player.addItem(act.item, -act.count);
                     }
                 }
+                else if (act.type === "reward_exp") {
+                    // 1. Grant XP using the existing player method
+                    Game.player.gainSkillExp(act.skill, act.amount);
+                    
+                    // 2. Visually show the XP gain using the HUD (duration: 1.5s)
+                    Game.updateSkillHUD(act.skill, 1500); 
+                    
+                    // 3. Log the event
+                    Game.log(`Gained ${act.amount} XP in ${act.skill}`);
+                }
                 else if (act.type === "log") Game.log(act.text);
                 else if (act.type === "interaction") {
                     SceneFunctions.fn_interaction(null, act.id);
@@ -383,6 +411,47 @@ const SceneFunctions = {
                         });
                         Game.currentNode = null;
                         Game.enterScene(target.key, target.node);
+                    }
+                }
+                else if (act.type === "set_objective") {
+                    if (GLOBAL_STATE.quests && GLOBAL_STATE.quests[act.quest]) {
+                        GLOBAL_STATE.quests[act.quest].objectives[act.objective] = act.status;
+                        Game.log(`Objective ${act.status.toUpperCase()}: ${act.objective}`);
+                        
+                        // If we just finished the objective we were currently tracking...
+                        if (act.status === "done" && GLOBAL_STATE.trackedQuest && 
+                            GLOBAL_STATE.trackedQuest.quest === act.quest && 
+                            GLOBAL_STATE.trackedQuest.obj === act.objective) {
+                            
+                            // 1. Remove the active path
+                            GLOBAL_STATE.trackedQuest = null;
+                            
+                            // 2. Set a temporary flag to catch the next objective in the chain
+                            GLOBAL_STATE.autoTrackNextObjectiveFor = act.quest;
+                        }
+                    }
+                }
+                else if (act.type === "add_objective") {
+                    if (!GLOBAL_STATE.quests) GLOBAL_STATE.quests = {};
+                    if (!GLOBAL_STATE.quests[act.quest]) {
+                        GLOBAL_STATE.quests[act.quest] = { location: act.location || "Unknown", objectives: {} };
+                    }
+                    
+                    if (GLOBAL_STATE.quests[act.quest].objectives[act.objective] !== "done") {
+                        GLOBAL_STATE.quests[act.quest].objectives[act.objective] = "active";
+                        
+                        // Update the quest's overarching location if provided
+                        if (act.location && act.location !== "none") {
+                            GLOBAL_STATE.quests[act.quest].location = act.location;
+                        }
+                        
+                        Game.log(`New Objective: ${act.objective}`);
+                        
+                        // --- NEW: Automatically track this if it directly follows a tracked completion ---
+                        if (GLOBAL_STATE.autoTrackNextObjectiveFor === act.quest) {
+                            Game.setTrackedQuest(act.quest, act.objective, act.location || "Unknown", true); // 'true' makes it silent
+                            GLOBAL_STATE.autoTrackNextObjectiveFor = null; // Consume the flag
+                        }
                     }
                 }
                 else if (act.type === "fight") {
@@ -414,15 +483,42 @@ const SceneFunctions = {
             });
         };
 
-        // 3. Define Logic Processor (Refactored from original nesting)
+        // 3. Define Logic Processor
         const processLogic = (logic) => {
             if (!logic) return;
 
-            // CHECK VAR LOGIC
-            if (logic.check_var) {
-                const val = GLOBAL_STATE.variables[logic.check_var];
+            let val = null;
+            let processBranches = false;
 
-                // A. Boolean Logic (if_true / if_false)
+            // A. Determine Value Source (Variable OR Draw)
+            if (logic.check_var) {
+                val = GLOBAL_STATE.variables[logic.check_var];
+                processBranches = true;
+            } else if (logic.draw && logic.switch_case) {
+                // Weighted Draw Logic
+                const weights = logic.draw.split(',').map(n => parseFloat(n));
+                const options = Object.keys(logic.switch_case);
+                
+                if (weights.length > 0 && options.length > 0) {
+                    let total = 0;
+                    const count = Math.min(weights.length, options.length);
+                    for(let i=0; i<count; i++) total += weights[i];
+                    
+                    let r = Math.random() * total;
+                    let acc = 0;
+                    for(let i=0; i<count; i++) {
+                        acc += weights[i];
+                        if (r < acc) {
+                            val = options[i];
+                            processBranches = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // B. Execute Branches
+            if (processBranches) {
                 if (logic.if_true && val) {
                     logic.if_true.dialogue 
                         ? Game.startDialogue(logic.if_true.dialogue, () => executeActions(logic.if_true.actions)) 
@@ -433,13 +529,11 @@ const SceneFunctions = {
                         : executeActions(logic.if_false.actions);
                 }
 
-                // B. Simple Value Map (actions only, for legacy support)
                 if (logic.if_value) {
                     const branch = logic.if_value[val] || logic.if_value["default"];
                     if (branch) executeActions(branch.actions);
                 }
 
-                // C. Switch Case Logic (actions + dialogue)
                 if (logic.switch_case) {
                     const branch = logic.switch_case[val] || logic.switch_case["else"] || logic.switch_case["default"];
                     if (branch) {
@@ -450,7 +544,6 @@ const SceneFunctions = {
                 }
             }
             
-            // Always execute base actions for this logic block
             executeActions(logic.actions);
         };
 
@@ -465,13 +558,11 @@ const SceneFunctions = {
 
         // 5. Execution Flow
         if (data.dialogue) {
-            // CASE A: Dialogue exists -> Play dialogue -> Run Logic -> Next
             Game.startDialogue(data.dialogue, () => {
                 if (data.on_finish) processLogic(data.on_finish);
                 if (next) next();
             });
         } else {
-            // CASE B: No Dialogue -> Run Logic immediately -> Next
             if (data.on_finish) processLogic(data.on_finish);
             if (next) next();
         }
@@ -487,6 +578,7 @@ const Game = {
     pathStack: [],
     cursor: 0,
     choiceCursor: 0,
+    questCursor: 0,
     activeInterval: null,
     combatTimer: null,
     activeBinding: null,
@@ -495,6 +587,7 @@ const Game = {
     inCombat: false,
     inDialogue: false,
     inMainMenu: true,
+    questLogActive: false,
     dialogueQueue: [],
     dialogueIndex: 0,
     dialogueOnComplete: null,
@@ -502,6 +595,9 @@ const Game = {
     dungeonIndex: 0,
     currentDungeonEnemy: null,
     dungeonTurn: 0,
+    questInteractables: [],
+
+    miniMapMuted: true,
     
     init: function() {
         this.player.hp = this.player.getMaxHP();
@@ -513,7 +609,24 @@ const Game = {
         this.showMainMenu();
         this.updatePlayerHUD();
     },
-    setupUI: function() { const attach = (id, fn) => { const el = document.getElementById(id); if(el) el.onclick = fn; }; attach('menu-toggle-btn', () => this.toggleCharacterMenu()); attach('system-menu-btn', () => this.toggleSaveModal(true)); attach('btn-close-modal', () => this.toggleSaveModal(false)); attach('btn-copy-save', () => this.generateSave()); attach('btn-load-save', () => this.loadSave()); },
+    toggleMiniMap: function() {
+        if (this.inDialogue || this.inMainMenu) return;
+        this.miniMapMuted = !this.miniMapMuted;
+        this.render();
+        this.log(this.miniMapMuted ? "Mini-map hidden." : "Mini-map shown.");
+    },
+    setupUI: function() {
+        const attach = (id, fn) => {
+            const el = document.getElementById(id);
+            if(el) el.onclick = fn;
+        };
+        attach('menu-toggle-btn', () => this.toggleCharacterMenu());
+        attach('quest-menu-btn', () => this.toggleQuestLog());
+        attach('system-menu-btn', () => this.toggleSaveModal(true));
+        attach('btn-close-modal', () => this.toggleSaveModal(false));
+        attach('btn-copy-save', () => this.generateSave());
+        attach('btn-load-save', () => this.loadSave());
+    },
     createCombatElements: function() {
         if (document.getElementById('combat-panel')) return;
         const panel = document.createElement('div');
@@ -527,7 +640,7 @@ const Game = {
         const parent = document.getElementById('control-panel');
         if (parent) { parent.appendChild(panel); } else { document.body.appendChild(panel); }
         
-        // --- NEW: Create Skill Bar Element ---
+        // --- Custom Skill HUD ---
         const hud = document.getElementById('hud-overlay');
         const skillDiv = document.createElement('div');
         skillDiv.id = 'temp-skill-bar-container';
@@ -537,6 +650,15 @@ const Game = {
                                 <div id="temp-skill-fill" style="height:100%; width:0%; background:#3498db;"></div>
                               </div>`;
         hud.appendChild(skillDiv);
+
+        // --- NEW: Unified Combat HUD ---
+        const visualPanel = document.getElementById('visual-panel');
+        if (visualPanel) {
+            const combatHud = document.createElement('div');
+            combatHud.id = 'unified-combat-hud';
+            // Removed inline style.cssText so style.css handles the positioning
+            visualPanel.appendChild(combatHud);
+        }
     },
     showMainMenu: function() {
         this.inMainMenu = true;
@@ -588,6 +710,7 @@ const Game = {
             const pureFollowers = this.player.followers.map(f => f.name);
             const saveData = { 
                 v: GLOBAL_STATE.variables, 
+                q: GLOBAL_STATE.quests,
                 l: locId, 
                 s: pureStack, 
                 p: {    hp: p.hp, 
@@ -616,6 +739,7 @@ const Game = {
             rawStr = rawStr.replace("RPG✨", "");
             const data = JSON.parse(Compressor.decode(rawStr));
             GLOBAL_STATE.variables = data.v;
+            GLOBAL_STATE.quests = data.q || {};
             this.player = new CharacterMenu();
             this.player.hp = data.p.hp;
             
@@ -673,7 +797,10 @@ const Game = {
         const linesSvg = document.getElementById('map-lines');
         const nodesDiv = document.getElementById('map-nodes');
         linesSvg.innerHTML = ''; nodesDiv.innerHTML = '';
-        if (!this.currentNode || visibleIndices.length === 0 || this.inCombat || this.player.active) { overlay.classList.remove('visible'); return; }
+        if (!this.currentNode || visibleIndices.length === 0 || this.inCombat || this.player.active || this.miniMapMuted) { 
+            overlay.classList.remove('visible'); 
+            return; 
+        }
         overlay.classList.add('visible');
         const cx = 50; const cy = 70; 
         const centerNode = document.createElement('div');
@@ -706,6 +833,123 @@ const Game = {
             nodesDiv.appendChild(node);
         });
     },
+    renderCombatHUD: function(enemies, actionData = null) {
+        const hud = document.getElementById('unified-combat-hud');
+        if (!hud) return;
+        
+        if (!this.inCombat) {
+            hud.style.display = 'none';
+            return;
+        }
+        hud.style.display = 'flex';
+        
+        const buildBar = (name, hp, maxHp, color, rightAlign=false) => {
+            const pct = Math.max(0, Math.min(100, (hp / maxHp) * 100));
+            const dir = rightAlign ? 'row-reverse' : 'row';
+            
+            // --- NEW: Check for animation classes and emojis ---
+            let animClass = "";
+            let actionIcon = "";
+            
+            if (actionData) {
+                if (name === actionData.attacker) {
+                    animClass = "anim-combat-attack";
+                    actionIcon = " ⚔️"; // Sword for attacking
+                } else if (name === actionData.target) {
+                    if (actionData.type === 'hit') {
+                        animClass = "anim-combat-hit";
+                        actionIcon = " 💥"; // Explosion for taking damage
+                    } else if (actionData.type === 'miss') {
+                        animClass = "anim-combat-miss";
+                        actionIcon = " 💨"; // Dash for dodging
+                    }
+                }
+            }
+
+            return `
+            <div class="combat-bar-wrapper ${animClass}">
+                <div class="combat-bar-header" style="flex-direction:${dir};">
+                    <span>${name}${actionIcon}</span>
+                    <span>${Math.ceil(hp)}/${maxHp}</span>
+                </div>
+                <div class="combat-bar-track">
+                    <div class="combat-bar-fill" style="width:${pct}%; background:${color}; ${rightAlign ? 'margin-left:auto;' : ''}"></div>
+                </div>
+            </div>`;
+        };
+
+        // Left Column: Player and Followers
+        let partyHtml = '<div style="flex:0.45; display:flex; flex-direction:column;">';
+        partyHtml += buildBar(this.player.name, this.player.hp, this.player.getMaxHP(), '#2ecc71');
+        this.player.followers.forEach(f => {
+            partyHtml += buildBar(f.name, f.hp, f.maxHp, '#27ae60');
+        });
+        partyHtml += '</div>';
+
+        // Right Column: Enemies
+        let enemyHtml = '<div style="flex:0.45; display:flex; flex-direction:column;">';
+        if (enemies) {
+            enemies.forEach(e => {
+                enemyHtml += buildBar(e.name, e.hp, e.maxHp, '#e74c3c', true);
+            });
+        }
+        enemyHtml += '</div>';
+
+        hud.innerHTML = partyHtml + enemyHtml;
+    },
+    showCombatSprite: function(actor) {
+        // 1. Target the ALWAYS-VISIBLE screen layer, not the dialogue layer
+        const container = document.getElementById('visual-panel');
+        if (!container) return;
+        
+        // Clean up any lingering sprite safely
+        const oldSprite = document.getElementById('combat-active-sprite');
+        if (oldSprite) oldSprite.remove();
+        
+        // 2. Create the Wrapper
+        const wrapper = document.createElement('div');
+        wrapper.id = 'combat-active-sprite';
+        wrapper.className = 'sprite-wrapper';
+        wrapper.style.left = '50%';
+        wrapper.style.bottom = '20%';
+        wrapper.style.transform = 'translateX(-50%)';
+        wrapper.style.zIndex = '150'; // Sit above the backgrounds
+        wrapper.style.pointerEvents = 'none'; // Don't block clicks
+        
+        // 3. Setup the Image 
+        let spriteFile = actor.sprite || "player.png";
+        const img = document.createElement('img');
+        img.className = 'character-sprite';
+        
+        // Handle missing files gracefully
+        img.onerror = function() {
+            const placeholder = createFloatingTextPlaceholder(spriteFile, 'character-sprite');
+            wrapper.innerHTML = '';
+            wrapper.appendChild(placeholder);
+            
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    placeholder.classList.add('anim-combat-flash');
+                });
+            });
+        };
+        
+        wrapper.appendChild(img);
+        container.appendChild(wrapper);
+        img.src = `data/images/sprites/${spriteFile}`;
+        
+        // 4. The Double-Frame Animation Trigger
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                img.classList.add('anim-combat-flash');
+            });
+        });
+        
+        // 5. Cleanup Timer
+        setTimeout(() => {
+            if (wrapper.parentNode) wrapper.remove();
+        }, 1000);
+    },
     // --- DIALOGUE ---
     startDialogue: function(dialogueObj, callback) {
         this.inDialogue = true;
@@ -734,9 +978,10 @@ const Game = {
                 const wrapper = document.createElement('div');
                 wrapper.id = 'sprite-' + speakerName;
                 wrapper.className = 'sprite-wrapper';
+                //wrapper.style.scale = leftPos;
                 wrapper.style.left = leftPos;
                 wrapper.style.bottom = bottomPos;
-                wrapper.style.transform = `translateX(-${leftPos})`;
+                wrapper.style.transform = `translateX(-50%)`;
                 wrapper.style.opacity = '0';
                 const img = document.createElement('img');
                 img.className = 'character-sprite';
@@ -767,14 +1012,18 @@ const Game = {
             let img = wrapper.querySelector('.character-sprite') || wrapper.querySelector('.missing-asset-placeholder');
             if(img) { img.classList.remove('anim-fade-in', 'anim-fade-out', 'anim-shake'); void img.offsetWidth; }
             const getScale = () => wrapper.dataset.scale || "1";
+            if (action !== 'hide' && action !== 'fade out') {
+                wrapper.style.opacity = '1';
+            }
+
             switch (action) {
                 case 'fade in': if(img) img.classList.add('anim-fade-in'); wrapper.style.opacity = '1'; break;
                 case 'fade out': if(img) img.classList.add('anim-fade-out'); break;
                 case 'shake': wrapper.style.opacity = '1'; if(img) img.classList.add('anim-shake'); break;
                 case 'show': wrapper.style.opacity = '1'; break;
                 case 'hide': wrapper.style.opacity = '0'; break;
-                case 'move': if (param) { let c = param.replace(/[()]/g, '').split(','); if (c.length === 2) { wrapper.style.left = c[0]; wrapper.style.bottom = c[1]; wrapper.style.transform = `translateX(-${c[0]}) scale(${getScale()})`; } } break;
-                case 'scale': if (param) { wrapper.dataset.scale = param; wrapper.style.transform = `translateX(-${wrapper.style.left}) scale(${param})`; } break;
+                case 'move': if (param) { let c = param.replace(/[()]/g, '').split(','); if (c.length === 2) { wrapper.style.left = c[0]; wrapper.style.bottom = c[1]; wrapper.style.transform = `translateX(-50%) scale(${getScale()})`; } } break;
+                case 'scale': if (param) { wrapper.dataset.scale = param; wrapper.style.transform = `translateX(-50%) scale(${param})`; } break;
                 case 'change_sprite': if (param) { const handleError = (el, s) => { const a = Array.from(el.classList).filter(c => c.startsWith('anim-')).join(' '); const p = createFloatingTextPlaceholder(s, 'character-sprite ' + a); wrapper.innerHTML = ''; wrapper.appendChild(p); }; if (img.tagName === 'DIV') { const n = document.createElement('img'); n.className = 'character-sprite'; n.src = "data/images/sprites/" + param; img = n; n.onerror = function() { handleError(this, param); }; wrapper.innerHTML = ''; wrapper.appendChild(n); } else { img.src = "data/images/sprites/" + param; img.onerror = function() { handleError(this, param); }; } } break;
             }
         });
@@ -812,14 +1061,130 @@ const Game = {
             else row.classList.remove('menu-focus-row');
         });
     },
-    toggleCharacterMenu: function() { if(this.inDialogue) return; this.player.active = !this.player.active; if(this.player.active) this.player.menuCursor = 0; this.render(); },
-    startPassiveRegen: function() { setInterval(() => { if (this.inCombat) return; const maxHp = this.player.getMaxHP(); if (this.player.hp <= 0 || this.player.hp >= maxHp) return; this.player.hp += this.player.getCombatSkills().vitality; if (this.player.hp > maxHp) this.player.hp = maxHp; this.updatePlayerHUD(); }, 2000); },
+    toggleCharacterMenu: function() {
+        if(this.inDialogue) return;
+        this.player.active = !this.player.active;
+        if(this.player.active){
+            this.player.menuCursor = 0;
+            this.questLogActive = false;
+        }
+        this.render();
+    },
+    toggleQuestLog: function() {
+        if (this.inDialogue) return;
+        this.questLogActive = !this.questLogActive;
+        if (this.questLogActive) this.player.active = false; // Close inventory if opening quests
+        this.render();
+    },
+    updateQuestCursor: function(idx) {
+        this.questCursor = idx;
+        const items = document.querySelectorAll('.quest-interactive');
+        items.forEach((item, i) => {
+            if (i === idx) item.classList.add('menu-focus-row');
+            else item.classList.remove('menu-focus-row');
+        });
+    },
+    executeQuestOption: function() {
+        if (!this.questInteractables || this.questInteractables.length === 0) return;
+        let action = this.questInteractables[this.questCursor];
+        if (action.type === 'close') this.toggleQuestLog();
+        else if (action.isTracked) this.untrackQuest();
+        else this.setTrackedQuest(action.quest, action.obj, action.location);
+    },
+    getQuestLogHTML: function() {
+        this.questInteractables = [];
+        let cursorIdx = 0;
+        let html = `<div style="font-family:'Courier New'; line-height:1.4; font-size:13px;">`;
+        html += `<div style="border-bottom:1px solid #555; margin-bottom:10px; padding-bottom:5px; text-align:center;"><strong>QUEST LOG</strong></div>`;
+        
+        if (!GLOBAL_STATE.quests || Object.keys(GLOBAL_STATE.quests).length === 0) {
+            html += `<div style='color:#666; font-style:italic; text-align:center; padding: 20px;'>(No active quests)</div>`;
+        } else {
+            let activeQuests = "";
+            let completedQuests = "";
+            
+            for (let qName in GLOBAL_STATE.quests) {
+                let q = GLOBAL_STATE.quests[qName];
+                let allDone = true;
+                let objHtml = "";
+                let hasVisibleObjectives = false;
+                
+                for (let obj in q.objectives) {
+                    let status = q.objectives[obj];
+                    if (status === "hidden") continue;
+                    
+                    hasVisibleObjectives = true;
+                    if (status !== "done") allDone = false;
+                    
+                    let color = status === "done" ? "#4f4" : (status === "failed" ? "#f44" : "#ddd");
+                    let symbol = status === "done" ? "✓" : (status === "failed" ? "✗" : "○");
+                    
+                    let trackBtn = "";
+                    let isTracked = (GLOBAL_STATE.trackedQuest && GLOBAL_STATE.trackedQuest.quest === qName && GLOBAL_STATE.trackedQuest.obj === obj);
+                    
+                    if (status === "active" && q.location && q.location !== "none" && q.location !== "Unknown") {
+                        this.questInteractables.push({ type: 'track', quest: qName, obj: obj, location: q.location, isTracked: isTracked });
+                        
+                        let isSelected = (cursorIdx === this.questCursor);
+                        let focusClass = isSelected ? "menu-focus-row" : "";
+                        
+                        // Replaced Game.render() with Game.updateQuestCursor()
+                        if (isTracked) {
+                            trackBtn = `<span class="quest-interactive ${focusClass}" style="color:#f1c40f; font-size:10px; cursor:pointer; margin-left:5px; border: 1px solid #555; padding: 1px 4px; border-radius:3px; transition:all 0.2s;" onmouseenter="Game.updateQuestCursor(${cursorIdx})" onclick="event.stopPropagation(); Game.questCursor = ${cursorIdx}; Game.executeQuestOption()">★ TRACKED</span>`;
+                        } else {
+                            trackBtn = `<span class="quest-interactive ${focusClass}" style="color:#888; font-size:10px; cursor:pointer; margin-left:5px; border: 1px solid #555; padding: 1px 4px; border-radius:3px; transition:all 0.2s;" onmouseenter="Game.updateQuestCursor(${cursorIdx})" onclick="event.stopPropagation(); Game.questCursor = ${cursorIdx}; Game.executeQuestOption()">☆ Track</span>`;
+                        }
+                        cursorIdx++;
+                    }
+                    
+                    objHtml += `<div style="color:${color}; margin-left:10px; margin-bottom: 3px; display:flex; align-items:center;"><span>${symbol} ${obj}</span> ${trackBtn}</div>`;
+                }
+                
+                if (!hasVisibleObjectives) continue;
+
+                let qHtml = `<div style="margin-bottom:12px;">
+                    <div style="color:var(--accent); font-weight:bold;">${qName} <span style="font-size:10px; color:#888;">[${q.location}]</span></div>
+                    ${objHtml}
+                </div>`;
+                
+                if (allDone) completedQuests += qHtml;
+                else activeQuests += qHtml;
+            }
+            
+            if (activeQuests) html += `<div style="margin-bottom:10px;"><div style="color:#aaa; font-weight:bold; margin-bottom:5px; border-bottom:1px dotted #555;">ACTIVE QUESTS</div>${activeQuests}</div>`;
+            if (completedQuests) html += `<div><div style="color:#aaa; font-weight:bold; margin-bottom:5px; border-bottom:1px dotted #555;">COMPLETED QUESTS</div>${completedQuests}</div>`;
+            if (!activeQuests && !completedQuests) html += `<div style='color:#666; font-style:italic; text-align:center;'>(No trackable quests)</div>`;
+        }
+        
+        this.questInteractables.push({ type: 'close' });
+        let closeSel = (cursorIdx === this.questCursor);
+        let closeClass = "menu-item interactive-row quest-interactive " + (closeSel ? "menu-focus-row" : "");
+        
+        // Replaced Game.render() with Game.updateQuestCursor()
+        html += `<div class="${closeClass}" style="justify-content:center; margin-top:15px; background:#444; color:#fff; font-weight:bold; text-align:center; cursor:pointer;" onmouseenter="Game.updateQuestCursor(${cursorIdx})" onclick="Game.toggleQuestLog()">CLOSE LOG</div>`;
+        html += `</div>`;
+        return html;
+    },
+    startPassiveRegen: function() {
+        setInterval(() => {
+            if (this.inCombat) return;
+            const maxHp = this.player.getMaxHP();
+            if (this.player.hp <= 0 || this.player.hp >= maxHp) return;
+            this.player.hp += this.player.getCombatSkills().vitality;
+            if (this.player.hp > maxHp) this.player.hp = maxHp;
+            this.updatePlayerHUD();
+        }, 2000);
+    },
     updatePlayerHUD: function() { 
         document.getElementById('player-name').textContent = `${this.player.name}`; 
         const maxHp = this.player.getMaxHP(); 
-        document.getElementById('hud-hp-bar').style.width = `${Math.max(0, Math.min(100, (this.player.hp / maxHp) * 100))}%`; 
-        
-        // Removed global XP bar update
+        const hpBar = document.getElementById('hud-hp-bar');
+        if (hpBar) {
+            hpBar.style.width = `${Math.max(0, Math.min(100, (this.player.hp / maxHp) * 100))}%`; 
+            // Hide the original top-left wrapper permanently to rely on the unified HUD
+            const parentRow = hpBar.closest ? hpBar.closest('.hud-row') : null;
+            if (parentRow) parentRow.style.display = 'none';
+        }
     },
     
     // --- SKILL HUD VISUALIZER ---
@@ -849,9 +1214,16 @@ const Game = {
         }
     },
     
-    showEnemyHUD: function(name, currentHp, maxHp, isBoss = false) { const hud = document.getElementById('enemy-hud'); hud.classList.add('visible'); const nameEl = document.getElementById('enemy-name'); nameEl.textContent = name; if (isBoss) nameEl.classList.add('boss-name'); else nameEl.classList.remove('boss-name'); this.updateEnemyHUD(currentHp, maxHp); },
-    updateEnemyHUD: function(currentHp, maxHp) { document.getElementById('enemy-hp-bar').style.width = `${Math.max(0, Math.min(100, (currentHp / maxHp) * 100))}%`; document.getElementById('enemy-stats').textContent = `${Math.ceil(currentHp)}/${maxHp} HP`; },
-    hideEnemyHUD: function() { document.getElementById('enemy-hud').classList.remove('visible'); },
+    showEnemyHUD: function(name, currentHp, maxHp, isBoss = false) { 
+        const oldHud = document.getElementById('enemy-hud');
+        if (oldHud) oldHud.style.display = 'none'; // Ensure legacy HUD is dead
+    },
+    updateEnemyHUD: function(currentHp, maxHp) { /* Deprecated */ },
+    hideEnemyHUD: function() { 
+        const hud = document.getElementById('unified-combat-hud'); 
+        if (hud) hud.style.display = 'none'; 
+    },
+
     updateDungeonUI: function() { const bar = document.getElementById('hud-dungeon-bar'); const row = document.getElementById('dungeon-progress-row'); if (this.currentActionName && this.currentActionName.startsWith('dungeon') && this.dungeonStages.length > 0) { row.classList.add('visible'); const pct = (this.dungeonIndex / this.dungeonStages.length) * 100; bar.style.width = `${pct}%`; } else { row.classList.remove('visible'); bar.style.width = '0%'; } },
     render: function() {
         if (this.inDialogue) return;
@@ -862,6 +1234,12 @@ const Game = {
         const menuContainer = document.getElementById('menu-list'); menuContainer.innerHTML = '';
 
         if (this.player.active) { document.getElementById('mini-map-overlay').classList.remove('visible'); menuContainer.innerHTML = this.player.getDisplayHTML(); const activeRow = document.querySelector('.menu-focus-row'); if (activeRow) activeRow.scrollIntoView({ block: 'nearest' }); return; }
+
+        if (this.questLogActive) { 
+            document.getElementById('mini-map-overlay').classList.remove('visible'); 
+            menuContainer.innerHTML = this.getQuestLogHTML(); 
+            return; 
+        }
 
         if (!this.currentNode) { document.getElementById('mini-map-overlay').classList.remove('visible'); return; }
         
@@ -876,6 +1254,20 @@ const Game = {
 
         this.drawMiniMap(visibleIndices, options);
         if (visibleIndices.length === 0) { menuContainer.innerHTML = '<div style="padding:20px; text-align:center; color:#666;">(No available actions)</div>'; return; }
+        
+        let highlightLocId = null;
+        if (GLOBAL_STATE.trackedQuest && GLOBAL_STATE.trackedQuest.targetId) {
+            let currentIdMatch = this.currentKey.match(/loc_id:(\d+)/);
+            if (currentIdMatch) {
+                let currentId = currentIdMatch[1];
+                if (currentId !== GLOBAL_STATE.trackedQuest.targetId) {
+                    let path = this.findPathToTarget(currentId, GLOBAL_STATE.trackedQuest.targetId);
+                    if (path && path.length > 1) highlightLocId = path[1];
+                }
+            }
+        }
+
+        // ?
         if (!visibleIndices.includes(this.cursor)) {
             const nextValid = visibleIndices.find(i => i >= this.cursor);
             this.cursor = (nextValid !== undefined) ? nextValid : visibleIndices[visibleIndices.length - 1];
@@ -890,7 +1282,28 @@ const Game = {
             
             el.onmouseenter = () => { this.cursor = index; Array.from(menuContainer.children).forEach(child => child.classList.remove('active')); el.classList.add('active'); const allNodes = document.querySelectorAll('.sub-node'); allNodes.forEach(n => { if (parseInt(n.dataset.index) === index) n.classList.add('active'); else n.classList.remove('active'); }); };
             
-            let content = `<span>${info.name}</span>`;
+            let destId = null;
+            let m = key.match(/loc_id:(\d+)/);
+            if (m) {
+                destId = m[1]; // Found direct child ID
+            } else if (info.role === 'return' && this.pathStack.length > 0) {
+                let parentKey = this.pathStack[this.pathStack.length - 1].key;
+                let pm = parentKey.match(/loc_id:(\d+)/);
+                if (pm) destId = pm[1]; // Found parent ID on Stack
+            }
+            
+            let isQuestTarget = (highlightLocId && destId === highlightLocId);
+            let marker = '';
+            if (isQuestTarget && GLOBAL_STATE.trackedQuest) {
+                let questName = GLOBAL_STATE.trackedQuest.quest;
+                marker = `<div style="display:flex; flex-direction:column; align-items:flex-end; margin-left:auto; max-width:55%; text-align:right;">
+                            <span style="color:#f1c40f; font-weight:bold; text-shadow: 0 0 5px #e67e22; font-size:11px; letter-spacing:1px;">⭐ QUEST</span>
+                            <span style="color:#ccc; font-size:10px; white-space:normal; word-wrap:break-word; line-height:1.2; margin-top:2px; font-style:italic;">${questName}</span>
+                          </div>`;
+            }
+
+            // We update the main span to ensure it vertically centers alongside our new marker block
+            let content = `<span style="display:flex; align-items:center;">${info.name}</span>${marker}`;
             if (info.role === 'craft') { 
                 const recipe = this.currentNode[key][2]; 
                 let canAfford = true; 
@@ -918,7 +1331,26 @@ const Game = {
         }
         const container = document.getElementById('toast-container'); const toast = document.createElement('div'); toast.className = 'toast'; toast.textContent = msg; container.appendChild(toast); setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 2500); 
     },
-    parseKey: function(k) { if (!k) return { role: "null", id: "error", name: "Error", image: "" }; const parts = k.split(';'); const core = parts[0]; let onEnter = null; let onEnterArg = null; let conditionId = null; for (let i = 1; i < parts.length; i++) { const segment = parts[i].trim(); const segParts = segment.split(':'); const key = segParts[0].trim(); const val = segParts[1] ? segParts[1].trim() : null; if (key === "fn_interaction") { onEnter = key; onEnterArg = val; } else if (key === "fn_condition") { conditionId = val; } } const pa = core.split(':'); return { role: pa[0], id: pa[1], name: pa[2] || pa[1], image: pa[3] || "placeholder.png", onEnter: onEnter, onEnterArg: onEnterArg, conditionId: conditionId }; },
+    parseKey: function(k) { 
+        if (!k) return { role: "null", id: "error", name: "Error", image: "" }; 
+        const parts = k.split(';'); 
+        const core = parts[0]; 
+        let onEnter = null; 
+        let onEnterArg = null; 
+        let onAfterArg = null; // --- NEW ---
+        let conditionId = null; 
+        for (let i = 1; i < parts.length; i++) { 
+            const segment = parts[i].trim(); 
+            const segParts = segment.split(':'); 
+            const key = segParts[0].trim(); 
+            const val = segParts[1] ? segParts[1].trim() : null; 
+            if (key === "fn_interaction") { onEnter = key; onEnterArg = val; } 
+            else if (key === "fn_post_interaction") { onAfterArg = val; } // --- NEW ---
+            else if (key === "fn_condition") { conditionId = val; } 
+        } 
+        const pa = core.split(':'); 
+        return { role: pa[0], id: pa[1], name: pa[2] || pa[1], image: pa[3] || "placeholder.png", onEnter: onEnter, onEnterArg: onEnterArg, onAfterArg: onAfterArg, conditionId: conditionId }; 
+    },
     enterScene: function(keyString, nodeObj) {
         const info = this.parseKey(keyString);
         if (nodeObj !== null) {
@@ -935,6 +1367,12 @@ const Game = {
         if (this.activeInterval) { clearInterval(this.activeInterval); this.activeInterval = null; }
         if (this.combatTimer) { clearTimeout(this.combatTimer); this.combatTimer = null; }
         
+        let triggerAfter = null;
+        if (this.currentActionName && !this.currentActionName.startsWith('scripted_')) {
+            const info = this.parseKey(this.currentActionName);
+            if (info.onAfterArg) triggerAfter = info.onAfterArg;
+        }
+
         this.currentActionName = ""; 
         this.activeBinding = null;
         this.nextInteraction = null;
@@ -951,6 +1389,11 @@ const Game = {
         this.dungeonIndex = 0; 
         for (let key in this.player.inventory) { this.player.inventory[key].amount = Math.floor(this.player.inventory[key].amount); if (this.player.inventory[key].amount <= 0) delete this.player.inventory[key]; } 
         this.render(); 
+
+        // --- NEW: Execute the captured interaction ---
+        if (triggerAfter && SceneFunctions.fn_interaction) {
+            setTimeout(() => SceneFunctions.fn_interaction(null, triggerAfter), 50);
+        }
     },
     waitForPlayer: function(callback) { if (this.combatTimer) clearTimeout(this.combatTimer); const btn = document.getElementById('btn-combat-end'); const ctrl = document.getElementById('combat-controls'); ctrl.classList.add('active'); const proceed = () => { ctrl.classList.remove('active'); callback(); }; btn.onclick = proceed; this.pendingCombatConfirmation = proceed; },
     executeOption: function(specificKey = null) {
@@ -1108,6 +1551,9 @@ const Game = {
         if (potentialTargets.length > 0) {
             let target = potentialTargets[Math.floor(Math.random() * potentialTargets.length)];
             
+            // Pass the whole actor object so the function can read actor.sprite!
+            this.showCombatSprite(actor);
+            
             // 1. Get Skills
             const actorSkills = actor.getCombatSkills ? actor.getCombatSkills() : actor.skills;
             const targetSkills = target.getCombatSkills ? target.getCombatSkills() : target.skills;
@@ -1142,46 +1588,47 @@ const Game = {
             const chance = landing_chance(agility_diff);
             
             if (Math.random() < chance) {
-                // Actual damage dealt
                 const actualDmg = 1+2*Math.floor(Math.max(0, rawDamage - defense)*Math.random());
-                // Damage negated (Can't negate more than the incoming raw damage)
                 const negatedDmg = Math.min(rawDamage, defense);
 
                 target.hp -= actualDmg;
+                if (target.hp <= 0) target.hp = 0; 
 
-                // --- XP LOGIC ---
-                // Attacker gains XP proportional to Damage DEALT
                 if (actor === this.player && actualDmg > 0) {
                     this.player.gainSkillExp(scalingStat, actualDmg); 
-                    this.updateSkillHUD(scalingStat, 1000); // <--- Show for 1 second
+                    this.updateSkillHUD(scalingStat, 1000); 
                 }
-
-                // Defender gains XP proportional to Damage NEGATED
                 if (target === this.player && negatedDmg > 0) {
                     this.player.gainSkillExp("defense", negatedDmg);
-                    this.updateSkillHUD("defense", 1000); // <--- Show for 1 second
+                    this.updateSkillHUD("defense", 1000); 
                 }
                 
                 this.log(`${actor.name} hits ${target.name} for ${actualDmg} (Stat: ${scalingStat})!`);
+                if (target.hp === 0) {
+                    this.log(`${target.name} has fainted!`);
+                }
+                
+                // --- THE ANIMATED RENDER (HIT) ---
+                this.renderCombatHUD(enemies, { attacker: actor.name, target: target.name, type: 'hit' });
+
             } else {
-                // Dodge XP logic
                 if (target === this.player) {
                      this.player.gainSkillExp("agility", 2); 
-                     this.updateSkillHUD("agility", 1000); // <--- Show for 1 second
+                     this.updateSkillHUD("agility", 1000); 
                 }
                 this.log(`${actor.name} missed ${target.name}!`);
+                
+                // --- THE ANIMATED RENDER (MISS) ---
+                this.renderCombatHUD(enemies, { attacker: actor.name, target: target.name, type: 'miss' });
             }
             
-            // Update HUDs
-            let totalEnemyHp = enemies.reduce((acc, e) => acc + Math.max(0, e.hp), 0);
-            let maxEnemyHp = enemies.reduce((acc, e) => acc + e.maxHp, 0);
-            this.updateEnemyHUD(totalEnemyHp, maxEnemyHp);
-            this.updatePlayerHUD();
+            // --- NOTE: Make sure there is NO this.renderCombatHUD(enemies); down here! ---
+            this.updatePlayerHUD(); 
         }
 
         this.combatTimer = setTimeout(() => {
             this.executeCombatTurn(participants, index + 1, enemies, roundInterval);
-        }, 800); 
+        }, 1500); 
     },
     startFightLoop: function(interval, notif, enemyDict) {
         this.inCombat = true;
@@ -1189,9 +1636,10 @@ const Game = {
         document.getElementById('combat-log-feed').innerHTML = ''; 
         document.getElementById('menu-list').style.display = 'none';
         let enemyTemplate = dictDraw(enemyDict);
-        let enemies = [new Enemy(enemyTemplate.name, enemyTemplate.hp, enemyTemplate.loots, enemyTemplate.skills)];
+        let enemies = [new Enemy(enemyTemplate.name, enemyTemplate.hp, enemyTemplate.loots, enemyTemplate.skills, enemyTemplate.sprite)];
         this.log(`Encounter: ${enemies[0].name}!`);
-        this.showEnemyHUD(enemies[0].name, enemies[0].hp, enemies[0].maxHp);
+        
+        this.renderCombatHUD(enemies); // <-- Initialize immediately
         this.triggerCombatRound(enemies, interval);
     },
     startDungeonLoop: function(stages) { this.dungeonStages = stages; this.dungeonIndex = 0; this.executeCurrentStage(); },
@@ -1221,10 +1669,15 @@ const Game = {
         const isDungeon = this.currentActionName.startsWith('dungeon') || this.currentActionName === 'scripted_dungeon';
         if (!isDungeon || this.dungeonIndex === 0) { document.getElementById('combat-log-feed').innerHTML = ''; }
         const enemyDict = stageData[2]; const enemyTemplate = dictDraw(enemyDict); 
-        this.currentDungeonEnemies = [new Enemy(enemyTemplate.name, enemyTemplate.hp, enemyTemplate.loots, enemyTemplate.skills)];
+        this.currentDungeonEnemies = [new Enemy(enemyTemplate.name, enemyTemplate.hp, enemyTemplate.loots, enemyTemplate.skills, enemyTemplate.sprite)];
+        
         const isBoss = (this.dungeonIndex === this.dungeonStages.length - 1);
-        let e = this.currentDungeonEnemies[0]; this.showEnemyHUD(e.name, e.hp, e.maxHp, isBoss); 
-        this.log(isBoss ? `BOSS BATTLE: ${e.name}!` : `Stage ${this.dungeonIndex+1}: ${e.name}`); 
+        let e = this.currentDungeonEnemies[0]; 
+        
+        this.renderCombatHUD(this.currentDungeonEnemies); // <-- Initialize immediately
+        
+        this.log(isBoss ? `BOSS BATTLE: ${e.name}!` : `Stage ${this.dungeonIndex+1}: ${e.name}`);
+
         this.updateDungeonUI();
         const duration = stageData[0];
         this.triggerCombatRound(this.currentDungeonEnemies, duration);
@@ -1232,6 +1685,7 @@ const Game = {
     setupInput: function() {
         document.addEventListener('keydown', (e) => {
             if (this.pendingCombatConfirmation && e.key === "Enter") { const fn = this.pendingCombatConfirmation; this.pendingCombatConfirmation = null; fn(); return; }
+            
             if (this.inDialogue) { 
                 if (document.getElementById('dialogue-questions').classList.contains('active')) { 
                     const btns = document.querySelectorAll('.choice-btn'); 
@@ -1241,28 +1695,69 @@ const Game = {
                     return; 
                 }
                 if (e.key === "Enter") { this.advanceDialogue(); return; }
+                return;
             }
+            
             if (this.inCombat) return;
+            
             if (this.inMainMenu) {
                 if (e.key === "ArrowUp") { this.cursor = (this.cursor === 1) ? 0 : 1; const menuItems = document.querySelectorAll('.menu-item'); if(menuItems.length > 1) { menuItems[0].className = 'menu-item' + (this.cursor === 0 ? ' active' : ''); menuItems[1].className = 'menu-item' + (this.cursor === 1 ? ' active' : ''); } }
                 else if (e.key === "ArrowDown") { this.cursor = (this.cursor === 0) ? 1 : 0; const menuItems = document.querySelectorAll('.menu-item'); if(menuItems.length > 1) { menuItems[0].className = 'menu-item' + (this.cursor === 0 ? ' active' : ''); menuItems[1].className = 'menu-item' + (this.cursor === 1 ? ' active' : ''); } }
                 else if (e.key === "Enter") { if (this.cursor === 0) this.startNewGame(); else this.toggleSaveModal(true); }
                 return;
             }
-            if (e.key.toLowerCase() === "s" && !this.player.active) { this.toggleSaveModal(true); return; }
+
+            if (e.key.toLowerCase() === "s" && !this.player.active && !this.questLogActive) { this.toggleSaveModal(true); return; }
             if (e.key === "Escape" && document.getElementById('save-modal').classList.contains('active')) { this.toggleSaveModal(false); return; }
 
+            // --- 1. QUEST LOG MENU INPUTS ---
+            if (this.questLogActive) {
+                if (e.key === "ArrowUp") { 
+                    this.questCursor--; 
+                    if (this.questCursor < 0) this.questCursor = Math.max(0, this.questInteractables.length - 1); 
+                    this.render(); 
+                } 
+                else if (e.key === "ArrowDown") { 
+                    if (this.questInteractables && this.questInteractables.length > 0) {
+                        this.questCursor = (this.questCursor + 1) % this.questInteractables.length; 
+                    }
+                    this.render(); 
+                } 
+                else if (e.key === "Enter") { 
+                    if (this.questInteractables && this.questInteractables.length > 0) {
+                        let action = this.questInteractables[this.questCursor];
+                        if (action.type === 'close') this.toggleQuestLog();
+                        else if (action.isTracked) this.untrackQuest();
+                        else this.setTrackedQuest(action.quest, action.obj, action.location);
+                    }
+                } 
+                else if (e.key === "Escape" || e.key.toLowerCase() === "q") { 
+                    this.toggleQuestLog(); 
+                }
+                return;
+            }
+
+            // --- 2. CHARACTER MENU INPUTS ---
             if (this.player.active) { 
                 if (e.key === "ArrowUp") this.player.moveCursor(-1); 
                 else if (e.key === "ArrowDown") this.player.moveCursor(1); 
                 else if (e.key === "Enter") this.player.selectOption(); 
                 else if (e.key === "Escape" || e.key.toLowerCase() === "c") this.toggleCharacterMenu(); 
-                return; 
+                return; // <-- THIS PREVENTS SCENE INTERACTION
             }
+
+            // --- 3. MENU TOGGLE HOTKEYS (When in Overworld) ---
+            if (e.key.toLowerCase() === "q") { this.toggleQuestLog(); return; }
+            if (e.key.toLowerCase() === "c") { this.toggleCharacterMenu(); return; }
+
+            if (e.key.toLowerCase() === "m") { this.toggleMiniMap(); return; }
+
+            // --- 4. SCENE NAVIGATION INPUTS ---
             if (this.currentNode && Object.keys(this.currentNode).length > 0) { 
                 const options = Object.keys(this.currentNode);
                 const visibleIndices = [];
                 options.forEach((key, index) => { const info = this.parseKey(key); if (!info.conditionId || this.checkConditionID(info.conditionId)) { visibleIndices.push(index); } });
+                
                 if (visibleIndices.length > 0) {
                     let currentVisualIndex = visibleIndices.indexOf(this.cursor);
                     if (currentVisualIndex === -1) currentVisualIndex = 0;
@@ -1271,7 +1766,6 @@ const Game = {
                     else if (e.key === "Enter") { this.executeOption(); } 
                 }
             }
-            if (e.key.toLowerCase() === "c") this.toggleCharacterMenu(); 
             if (e.key === "Escape") this.stopAction();
         });
     },
@@ -1285,6 +1779,16 @@ const Game = {
             if (cond.op === "==") return count == cond.val;
         } 
         else if (cond.type === "follower") { const isPresent = this.player.followers.some(f => f.name === cond.id); return isPresent === cond.in_party; }
+        else if (cond.type === "quest_objective") {
+            const quest = GLOBAL_STATE.quests[cond.quest];
+            const currentStatus = (quest && quest.objectives) ? quest.objectives[cond.objective] : null;
+            
+            // Allow checking if status is NOT a certain value (e.g., "!=", "done")
+            if (cond.op === "!=") return currentStatus !== cond.status;
+            
+            // Otherwise, check for exact match
+            return currentStatus === cond.status;
+        }
         else {
             let val;
             if (cond.var === "rand:uniform") val = Math.random(); 
@@ -1305,6 +1809,105 @@ const Game = {
         if (!rules) return true; 
         const match = rules.find(r => { if (r.condition === "default") return true; const conditions = Array.isArray(r.condition) ? r.condition : [r.condition]; return conditions.every(c => this.checkCriteria(c)); });
         return !!match; 
+    },
+    calculateWorldGraph: function() {
+        const graph = {};
+        
+        // 1. Traverse World Map for Tree Connections
+        const traverse = (node, parentId) => {
+            if (!node || typeof node !== 'object') return;
+            for (let key in node) {
+                let match = key.match(/loc_id:(\d+)/);
+                if (match) {
+                    let id = match[1];
+                    if (!graph[id]) graph[id] = [];
+                    
+                    if (parentId) {
+                        if (!graph[parentId]) graph[parentId] = [];
+                        // Tree links are bidirectional
+                        if (!graph[parentId].includes(id)) graph[parentId].push(id);
+                        if (!graph[id].includes(parentId)) graph[id].push(parentId);
+                    }
+                    traverse(node[key], id);
+                }
+            }
+        };
+        for (let rootKey in WORLD_MAP) traverse({ [rootKey]: WORLD_MAP[rootKey] }, null);
+        
+        // 2. Map Cross-Tree SCENE_LINKS
+        if (typeof SCENE_LINKS !== 'undefined') {
+            for (let src in SCENE_LINKS) {
+                let m1 = src.match(/\[(\d+)\]/);
+                if (m1) {
+                    let id1 = m1[1];
+                    if (!graph[id1]) graph[id1] = [];
+                    SCENE_LINKS[src].forEach(dest => {
+                        let m2 = dest.match(/\[(\d+)\]/);
+                        if (m2) {
+                            let id2 = m2[1];
+                            if (!graph[id2]) graph[id2] = [];
+                            // Links added (assuming one-way teleports unless specified otherwise)
+                            if (!graph[id1].includes(id2)) graph[id1].push(id2);
+                        }
+                    });
+                }
+            }
+        }
+        this.worldGraph = graph;
+    },
+    findPathToTarget: function(startId, targetId) {
+        if (!this.worldGraph) this.calculateWorldGraph();
+        if (!this.worldGraph[startId] || !this.worldGraph[targetId]) return null;
+        
+        // Standard Breadth-First Search (BFS)
+        let queue = [[startId]];
+        let visited = new Set([startId]);
+        
+        while (queue.length > 0) {
+            let path = queue.shift();
+            let current = path[path.length - 1];
+            
+            if (current === targetId) return path;
+            
+            let neighbors = this.worldGraph[current] || [];
+            for (let next of neighbors) {
+                if (!visited.has(next)) {
+                    visited.add(next);
+                    queue.push([...path, next]);
+                }
+            }
+        }
+        return null;
+    },
+
+    untrackQuest: function() {
+        GLOBAL_STATE.trackedQuest = null;
+        this.render();
+    },
+
+    setTrackedQuest: function(questName, objName, locationStr, silent = false) {
+        let m = locationStr.match(/\[(\d+)\]/);
+        if (!m) { 
+            if (!silent) alert("This objective has no known location!"); 
+            return; 
+        }
+        let targetId = m[1];
+        
+        let currentIdMatch = this.currentKey.match(/loc_id:(\d+)/);
+        if (!currentIdMatch) return;
+        let currentId = currentIdMatch[1];
+        
+        // Refresh graph dynamically in case SCENE_LINKS updated
+        this.calculateWorldGraph();
+        
+        let path = this.findPathToTarget(currentId, targetId);
+        if (!path) {
+            if (!silent) alert("Cannot find a path to the objective from here!");
+            return;
+        }
+        
+        GLOBAL_STATE.trackedQuest = { quest: questName, obj: objName, targetId: targetId };
+        this.render();
     },
 };
 Game.init();

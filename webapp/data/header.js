@@ -29,22 +29,24 @@ class Item {
 }
 
 class Enemy { 
-    constructor(n, hp, loots, skills) { 
+    constructor(n, hp, loots, skills, sprite) { 
         this.name=n; 
         this.hp=hp; 
         this.maxHp=hp; 
         this.loots=loots; 
         this.skills=skills; 
+        this.sprite=sprite;
     }
 }
 
 class Follower { 
-    constructor(n, hp, skills, interaction_id) { 
+    constructor(n, hp, skills, interaction_id, sprite) { 
         this.name = n; 
         this.hp = hp; 
         this.maxHp = hp; 
         this.skills = skills; 
         this.interaction_id = interaction_id || null;
+        this.sprite=sprite;
     }
 }
 
@@ -67,13 +69,21 @@ const SKILL_CONSTANTS = {
 let ITEM_DEFINITIONS = {};
 let FOLLOWER_DEFINITIONS = {};
 let INTERACTION_REGISTRY = {};
+let SCENE_LINKS = {};
 let GLOBAL_STATE = { 
     variables: {}, 
-    activeVariable: "" 
+    activeVariable: "",
+    quests: {},
+    trackedQuest: null,
 };
+
 function AppendIntRegEntry(key, list) {
     if (key in INTERACTION_REGISTRY) INTERACTION_REGISTRY[key] = list.concat(INTERACTION_REGISTRY[key]); 
     else INTERACTION_REGISTRY[key] = list;
 }
-const startingScene = "scene:open world:🌍 Open World:icon.png; fn_interaction:game_intro"
 
+function AppendSceneLink(key, element) {
+    let list = [element];
+    if (key in SCENE_LINKS) SCENE_LINKS[key] = list.concat(SCENE_LINKS[key]); 
+    else SCENE_LINKS[key] = list;
+}

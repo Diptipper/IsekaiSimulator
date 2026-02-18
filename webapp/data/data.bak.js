@@ -41,21 +41,21 @@ Object.assign(ITEM_DEFINITIONS, {
 
 // :::::: Enemies ::::::::::::::::::::::::::::::::::::::::::::::::::::
 
-const Shadow_Knight = new Enemy("Shadow Knight", 50, {  }, new Skills(1, 0, 0, 0, 0, 0, 0),"shadow_knight.png");
-const Demon_King = new Enemy("Demon King", 100, { "Legendary Sword": 1 }, new Skills(1, 0, 0, 0, 0, 0, 0),"demon_lord.png");
-const Goblin_Scout = new Enemy("Goblin Scout", 1, { "Goblin Ear": 1, "Potion": 0.2 }, new Skills(0, 0, 0, 0, 0, 0, 0),"troll.png");
-const Dire_Wolf = new Enemy("Dire Wolf", 1, { "Wild Flower": 1 }, new Skills(0, 0, 0, 0, 0, 0, 0),"wolf.png");
-const Forest_Troll = new Enemy("Forest Troll", 20, { "Gold Coin": 5 }, new Skills(1, 0, 0, 0, 0, 0, 0),"troll.png");
+const Shadow_Knight = new Enemy("Shadow Knight", 1, {  }, new Skills(0, 0, 0, 0, 0, 0, 0));
+const Demon_King = new Enemy("Demon King", 1, { "Legendary Sword": 1 }, new Skills(0, 0, 0, 0, 0, 0, 0));
+const Goblin_Scout = new Enemy("Goblin Scout", 1, { "Goblin Ear": 1, "Potion": 0.2 }, new Skills(0, 0, 0, 0, 0, 0, 0));
+const Dire_Wolf = new Enemy("Dire Wolf", 1, { "Wild Flower": 1 }, new Skills(0, 0, 0, 0, 0, 0, 0));
+const Forest_Troll = new Enemy("Forest Troll", 1, { "Gold Coin": 5 }, new Skills(0, 0, 0, 0, 0, 0, 0));
 
 Object.assign(FOLLOWER_DEFINITIONS, {
-    "Rookie Healer": { hp: 20, skills: new Skills(2, 2, 8, 2, 0, 0, 0), interaction: "follower_healer_talk", sprite:"healer.png" },
-    "Veteran Merc": { hp: 50, skills: new Skills(12, 6, 0, 4, 0, 0, 0), interaction: "follower_merc_talk", sprite:"mercenary.png" },
-    "Elara": { hp: 45, skills: new Skills(10, 3, 2, 8, 0, 0, 0), interaction: "follower_elara_talk", sprite:"waifu.png" },
+    "Rookie Healer": { hp: 20, skills: new Skills(2, 2, 8, 2, 0, 0, 0), interaction: "follower_healer_talk" },
+    "Veteran Merc": { hp: 50, skills: new Skills(12, 6, 0, 4, 0, 0, 0), interaction: "follower_merc_talk" },
+    "Elara": { hp: 45, skills: new Skills(10, 3, 2, 8, 0, 0, 0), interaction: "follower_elara_talk" },
 });
 
 // :::::: Dialogues ::::::::::::::::::::::::::::::::::::::::::::::::::
 
-const game_intro_dlg_491 = {
+const game_intro_dlg_534 = {
     "background": "heaven_clouds.png",
     "speakers": {
         "Goddess": [
@@ -134,7 +134,7 @@ const game_intro_dlg_491 = {
     ]
 };
 
-const game_intro_res_castle_dlg_286 = {
+const game_intro_res_castle_dlg_643 = {
     "background": "heaven_clouds.png",
     "speakers": {
         "Goddess": [
@@ -162,7 +162,7 @@ const game_intro_res_castle_dlg_286 = {
     ]
 };
 
-const castle_summoned_dlg_177 = {
+const castle_summoned_dlg_274 = {
     "background": "royal_chamber.png",
     "speakers": {
         "King": [
@@ -250,7 +250,7 @@ const castle_summoned_dlg_177 = {
     ]
 };
 
-const demon_king_dlg_723 = {
+const demon_king_dlg_986 = {
     "background": "throne_room_dark.png",
     "speakers": {
         "Demon King": [
@@ -264,7 +264,7 @@ const demon_king_dlg_723 = {
             "Demon King",
             "Stop right there.",
             [
-                "Demon King:fade in"
+                "DemonKing:fade in"
             ]
         ],
         [
@@ -302,7 +302,7 @@ const demon_king_dlg_723 = {
     ]
 };
 
-const demon_king_defeated_dlg_937 = {
+const demon_king_defeated_dlg_276 = {
     "background": "throne_room_dark.png",
     "speakers": {
         "Demon King": [
@@ -316,7 +316,7 @@ const demon_king_defeated_dlg_937 = {
             "Demon King",
             "Okay, okay! I yield!",
             [
-                "Demon King:shake"
+                "DemonKing:shake"
             ]
         ],
         [
@@ -336,13 +336,13 @@ const demon_king_defeated_dlg_937 = {
             "Demon King",
             "Sure. Now get out before the janitor arrives.",
             [
-                "Demon King:fade out"
+                "DemonKing:fade out"
             ]
         ]
     ]
 };
 
-const castle_dlg_312 = {
+const castle_dlg_244 = {
     "background": "royal_chamber.png",
     "speakers": {
         "King": [
@@ -356,7 +356,7 @@ const castle_dlg_312 = {
             "King",
             "By the gods! Is that the Demon King's horn?",
             [
-                "King:fade in"
+                "king:fade in"
             ]
         ],
         [
@@ -376,11 +376,11 @@ const castle_dlg_312 = {
     ]
 };
 
-const recruit_merc_dlg_100 = {
+const recruit_merc_dlg_810 = {
     "background": "tavern_inside.png",
     "speakers": {
         "Mercenary": [
-            "mercenary.png",
+            "knight.png",
             "(50%,0%)"
         ]
     },
@@ -408,11 +408,11 @@ const recruit_merc_dlg_100 = {
     ]
 };
 
-const recruit_merc_dlg_890 = {
+const recruit_merc_dlg_528 = {
     "background": "tavern_inside.png",
     "speakers": {
         "Mercenary": [
-            "mercenary.png",
+            "knight.png",
             "(50%,0%)"
         ]
     },
@@ -434,11 +434,11 @@ const recruit_merc_dlg_890 = {
     ]
 };
 
-const recruit_healer_dlg_244 = {
+const recruit_healer_dlg_799 = {
     "background": "tavern_inside.png",
     "speakers": {
         "Healer": [
-            "healer.png",
+            "goddess.png",
             "(50%,0%)"
         ]
     },
@@ -466,11 +466,11 @@ const recruit_healer_dlg_244 = {
     ]
 };
 
-const recruit_healer_dlg_227 = {
+const recruit_healer_dlg_278 = {
     "background": "tavern_inside.png",
     "speakers": {
         "Healer": [
-            "healer.png",
+            "goddess.png",
             "(50%,0%)"
         ]
     },
@@ -480,7 +480,7 @@ const recruit_healer_dlg_227 = {
             "Healer",
             "They are beautiful...",
             [
-                "Healer:fade in"
+                "Healer:move:(50%,10%)"
             ]
         ],
         [
@@ -492,11 +492,11 @@ const recruit_healer_dlg_227 = {
     ]
 };
 
-const gm_interaction_dlg_362 = {
+const gm_interaction_dlg_337 = {
     "background": "guild_hall.png",
     "speakers": {
         "Guildmaster": [
-            "guild_master.png",
+            "king.png",
             "(50%,0%)"
         ]
     },
@@ -530,11 +530,11 @@ const gm_interaction_dlg_362 = {
     ]
 };
 
-const gm_interaction_dlg_975 = {
+const gm_interaction_dlg_707 = {
     "background": "guild_hall.png",
     "speakers": {
         "Guildmaster": [
-            "guild_master.png",
+            "king.png",
             "(50%,0%)"
         ]
     },
@@ -562,16 +562,16 @@ const gm_interaction_dlg_975 = {
     ]
 };
 
-const woods_dlg_236 = {
+const woods_dlg_591 = {
     "background": "forest_clearing.png",
     "speakers": {
         "Girl": [
-            "waifu.png",
-            "(25%,0%)"
+            "goddess.png",
+            "(70%,0%)"
         ],
         "Troll": [
-            "troll.png",
-            "(75%,0%)"
+            "demon_lord.png",
+            "(30%,0%)"
         ]
     },
     "data": [
@@ -609,11 +609,11 @@ const woods_dlg_236 = {
     ]
 };
 
-const elara_resolution_dlg_637 = {
+const elara_resolution_dlg_896 = {
     "background": "forest_clearing.png",
     "speakers": {
         "Elara": [
-            "waifu.png",
+            "goddess.png",
             "(50%,0%)"
         ]
     },
@@ -647,11 +647,11 @@ const elara_resolution_dlg_637 = {
     ]
 };
 
-const tavern_dlg_139 = {
+const tavern_dlg_752 = {
     "background": "tavern_inside.png",
     "speakers": {
         "Elara": [
-            "waifu.png",
+            "goddess.png",
             "(50%,0%)"
         ]
     },
@@ -739,7 +739,7 @@ const tavern_dlg_139 = {
     ]
 };
 
-const harbor_main_dlg_244 = {
+const harbor_main_dlg_975 = {
     "background": "sea.png",
     "speakers": {
         "Sailor": [
@@ -770,7 +770,7 @@ const harbor_main_dlg_244 = {
     ]
 };
 
-const harbor_island_dlg_144 = {
+const harbor_island_dlg_812 = {
     "background": "sea.png",
     "speakers": {
         "Sailor": [
@@ -794,38 +794,6 @@ const harbor_island_dlg_144 = {
             [],
             {
                 "Back to town": "to town",
-                "To the demon island": "to demon island",
-                "Nevermind": "nevermind"
-            }
-        ]
-    ]
-};
-
-const harbor_island_demon_dlg_144 = {
-    "background": "sea.png",
-    "speakers": {
-        "Sailor": [
-            "sailor.png",
-            "(50%,0%)"
-        ]
-    },
-    "data": [
-        [
-            "dialogue",
-            "Sailor",
-            "Where ya going?",
-            [
-                "Sailor:fade in"
-            ]
-        ],
-        [
-            "question",
-            "Sailor",
-            "Where ya going?",
-            [],
-            {
-                "Back to town": "to town",
-                "To the tropical island": "to island",
                 "Nevermind": "nevermind"
             }
         ]
@@ -857,7 +825,7 @@ AppendIntRegEntry("game_intro", [
             "val": "false"
         },
         "data": {
-            "dialogue": game_intro_dlg_491,
+            "dialogue": game_intro_dlg_534,
             "binding": "starting location",
             "on_finish": {
                 "actions": [],
@@ -875,7 +843,7 @@ AppendIntRegEntry("game_intro", [
                                 "target": "castle"
                             }
                         ],
-                        "dialogue": game_intro_res_castle_dlg_286
+                        "dialogue": game_intro_res_castle_dlg_643
                     },
                     "in town": {
                         "actions": [
@@ -889,7 +857,7 @@ AppendIntRegEntry("game_intro", [
                                 "target": "town"
                             }
                         ],
-                        "dialogue": game_intro_res_castle_dlg_286
+                        "dialogue": game_intro_res_castle_dlg_643
                     },
                     "adventurer": {
                         "actions": [
@@ -903,7 +871,7 @@ AppendIntRegEntry("game_intro", [
                                 "target": "adventurer's guild"
                             }
                         ],
-                        "dialogue": game_intro_res_castle_dlg_286
+                        "dialogue": game_intro_res_castle_dlg_643
                     },
                     "woods": {
                         "actions": [
@@ -917,7 +885,7 @@ AppendIntRegEntry("game_intro", [
                                 "target": "woods"
                             }
                         ],
-                        "dialogue": game_intro_res_castle_dlg_286
+                        "dialogue": game_intro_res_castle_dlg_643
                     }
                 }
             }
@@ -965,7 +933,7 @@ AppendIntRegEntry("castle_summoned", [
     {
         "condition": "default",
         "data": {
-            "dialogue": castle_summoned_dlg_177,
+            "dialogue": castle_summoned_dlg_274,
             "on_finish": {
                 "actions": [
                     {
@@ -1004,7 +972,7 @@ AppendIntRegEntry("demon_king", [
             }
         ],
         "data": {
-            "dialogue": demon_king_dlg_723,
+            "dialogue": demon_king_dlg_986,
             "on_finish": {
                 "actions": [
                     {
@@ -1022,7 +990,7 @@ AppendIntRegEntry("demon_king_defeated", [
     {
         "condition": "default",
         "data": {
-            "dialogue": demon_king_defeated_dlg_937,
+            "dialogue": demon_king_defeated_dlg_276,
             "on_finish": {
                 "actions": [
                     {
@@ -1073,7 +1041,7 @@ AppendIntRegEntry("castle", [
             }
         ],
         "data": {
-            "dialogue": castle_dlg_312,
+            "dialogue": castle_dlg_244,
             "on_finish": {
                 "actions": [
                     {
@@ -1126,7 +1094,7 @@ AppendIntRegEntry("recruit_merc", [
     {
         "condition": "default",
         "data": {
-            "dialogue": recruit_merc_dlg_100,
+            "dialogue": recruit_merc_dlg_810,
             "on_finish": {
                 "actions": [
                     {
@@ -1143,20 +1111,12 @@ AppendIntRegEntry("recruit_merc", [
 
 AppendIntRegEntry("wood_fight", [
     {
-        "condition": [
-            {
-                "type": "item",
-                "id": "Goblin Ear",
-                "op": ">=",
-                "val": "3"
-            },
-            {
-                "type": "quest_objective",
-                "quest": "Recruiting the Mercenary",
-                "objective": "Collecting 3 goblin ears",
-                "status": "active"
-            }
-        ],
+        "condition": {
+            "type": "item",
+            "id": "Goblin Ear",
+            "op": ">=",
+            "val": "3"
+        },
         "data": {
             "on_finish": {
                 "actions": [
@@ -1187,7 +1147,7 @@ AppendIntRegEntry("recruit_merc", [
             "val": 3
         },
         "data": {
-            "dialogue": recruit_merc_dlg_890,
+            "dialogue": recruit_merc_dlg_528,
             "on_finish": {
                 "actions": [
                     {
@@ -1238,20 +1198,12 @@ AppendIntRegEntry("recruit_merc", [
 
 AppendIntRegEntry("wood_fight", [
     {
-        "condition": [
-            {
-                "type": "item",
-                "id": "Wild Flower",
-                "op": ">=",
-                "val": "3"
-            },
-            {
-                "type": "quest_objective",
-                "quest": "Recruiting the Healer",
-                "objective": "Collecting 3 wild flowers",
-                "status": "active"
-            }
-        ],
+        "condition": {
+            "type": "item",
+            "id": "Wild Flower",
+            "op": ">=",
+            "val": "3"
+        },
         "data": {
             "on_finish": {
                 "actions": [
@@ -1277,7 +1229,7 @@ AppendIntRegEntry("recruit_healer", [
     {
         "condition": "default",
         "data": {
-            "dialogue": recruit_healer_dlg_244,
+            "dialogue": recruit_healer_dlg_799,
             "on_finish": {
                 "actions": [
                     {
@@ -1301,7 +1253,7 @@ AppendIntRegEntry("recruit_healer", [
             "val": 3
         },
         "data": {
-            "dialogue": recruit_healer_dlg_227,
+            "dialogue": recruit_healer_dlg_278,
             "on_finish": {
                 "actions": [
                     {
@@ -1392,7 +1344,7 @@ AppendIntRegEntry("gm_interaction", [
     {
         "condition": "default",
         "data": {
-            "dialogue": gm_interaction_dlg_362,
+            "dialogue": gm_interaction_dlg_337,
             "on_finish": {
                 "actions": [
                     {
@@ -1403,12 +1355,6 @@ AppendIntRegEntry("gm_interaction", [
                     {
                         "type": "log",
                         "text": "Quest Started: Find Elara in the Woods."
-                    },
-                    {
-                        "type": "add_objective",
-                        "quest": "Save Elara",
-                        "objective": "Investigate the woods",
-                        "location": "woods [243236]"
                     }
                 ]
             }
@@ -1457,7 +1403,7 @@ AppendIntRegEntry("gm_interaction", [
             }
         ],
         "data": {
-            "dialogue": gm_interaction_dlg_975,
+            "dialogue": gm_interaction_dlg_707,
             "on_finish": {
                 "actions": [
                     {
@@ -1473,12 +1419,6 @@ AppendIntRegEntry("gm_interaction", [
                     {
                         "type": "log",
                         "text": "Quest Complete: Daughter Saved!"
-                    },
-                    {
-                        "type": "set_objective",
-                        "quest": "Save Elara",
-                        "objective": "Return to the guild master",
-                        "status": "done"
                     }
                 ]
             }
@@ -1501,7 +1441,7 @@ AppendIntRegEntry("woods", [
             }
         ],
         "data": {
-            "dialogue": woods_dlg_236,
+            "dialogue": woods_dlg_591,
             "on_finish": {
                 "actions": [
                     {
@@ -1544,7 +1484,7 @@ AppendIntRegEntry("elara_resolution", [
             }
         ],
         "data": {
-            "dialogue": elara_resolution_dlg_637,
+            "dialogue": elara_resolution_dlg_896,
             "on_finish": {
                 "actions": [
                     {
@@ -1560,18 +1500,6 @@ AppendIntRegEntry("elara_resolution", [
                     {
                         "type": "log",
                         "text": "Elara joined the party! Return to Guildmaster."
-                    },
-                    {
-                        "type": "set_objective",
-                        "quest": "Save Elara",
-                        "objective": "Investigate the woods",
-                        "status": "done"
-                    },
-                    {
-                        "type": "add_objective",
-                        "quest": "Save Elara",
-                        "objective": "Return to the guild master",
-                        "location": "gm [748682]"
                     }
                 ]
             }
@@ -1608,7 +1536,7 @@ AppendIntRegEntry("tavern", [
             }
         ],
         "data": {
-            "dialogue": tavern_dlg_139,
+            "dialogue": tavern_dlg_752,
             "on_finish": {
                 "actions": [
                     {
@@ -1640,7 +1568,7 @@ AppendIntRegEntry("harbor_main", [
     {
         "condition": "default",
         "data": {
-            "dialogue": harbor_main_dlg_244,
+            "dialogue": harbor_main_dlg_975,
             "binding": "ship answer",
             "on_finish": {
                 "actions": [],
@@ -1658,7 +1586,7 @@ AppendIntRegEntry("harbor_main", [
                         "actions": [
                             {
                                 "type": "goto",
-                                "target": "demon island"
+                                "target": "demon_island"
                             }
                         ]
                     },
@@ -1675,7 +1603,7 @@ AppendIntRegEntry("harbor_island", [
     {
         "condition": "default",
         "data": {
-            "dialogue": harbor_island_dlg_144,
+            "dialogue": harbor_island_dlg_812,
             "binding": "ship answer",
             "on_finish": {
                 "actions": [],
@@ -1686,49 +1614,6 @@ AppendIntRegEntry("harbor_island", [
                             {
                                 "type": "goto",
                                 "target": "town"
-                            }
-                        ]
-                    },
-                    "to demon island": {
-                        "actions": [
-                            {
-                                "type": "goto",
-                                "target": "demon island"
-                            }
-                        ]
-                    },
-                    "nevermind": {
-                        "actions": []
-                    }
-                }
-            }
-        }
-    }
-]);
-
-AppendIntRegEntry("harbor_island_demon", [
-    {
-        "condition": "default",
-        "data": {
-            "dialogue": harbor_island_demon_dlg_144,
-            "binding": "ship answer",
-            "on_finish": {
-                "actions": [],
-                "check_var": "ship answer",
-                "switch_case": {
-                    "to town": {
-                        "actions": [
-                            {
-                                "type": "goto",
-                                "target": "town"
-                            }
-                        ]
-                    },
-                    "to island": {
-                        "actions": [
-                            {
-                                "type": "goto",
-                                "target": "tropical island"
                             }
                         ]
                     },
@@ -1744,37 +1629,7 @@ AppendIntRegEntry("harbor_island_demon", [
 // :::::: Maps :::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
 let WORLD_MAP = {
-    "scene:demon island:💀 Demon island:icon.png; loc_id:793646": {
-        "scene:demon king's castle:😈 Demon king's Castle:icon.png; loc_id:842908": {
-            "return:return:🔙 Exit:icon.png": {},
-            "dungeon:throne:☠️ Approach Throne:icon.png; fn_interaction:demon_king; loc_id:984829": [
-                [
-                    1000,
-                    "Fighting guards...",
-                    {
-                        "Shadow Knight": [
-                            1,
-                            Shadow_Knight
-                        ]
-                    }
-                ],
-                [
-                    1000,
-                    "EPIC BATTLE...",
-                    {
-                        "Demon King": [
-                            1,
-                            Demon_King
-                        ]
-                    }
-                ],
-                [
-                    "fn_interaction:demon_king_defeated"
-                ]
-            ]
-        },
-        "scene:harbor:⛵ Harbor:icon.png; fn_interaction:harbor_island_demon; loc_id:611942": null
-    },
+    "scene:demon island:💀 Demon island:icon.png; loc_id:793646": {},
     "scene:open world:🌍 Open World:icon.png; fn_interaction:game_intro; loc_id:898570": {
         "scene:town:🏬 Town:town.png; loc_id:795742": {
             "return:return:🔙 Exit:icon.png": {},
@@ -1895,8 +1750,6 @@ let WORLD_MAP = {
 
 // :::::: Scripted Transitions (GoTo) :::::::::::::::::::::::::::::::
 AppendSceneLink("harbor [877542]", "tropical island [793645]");
-AppendSceneLink("harbor [877542]", "demon island [793646]");
-AppendSceneLink("harbor [611941]", "town [795742]");
-AppendSceneLink("harbor [611941]", "demon island [793646]");
+AppendSceneLink("harbor [877542]", "demon_island [unknown]");
 AppendSceneLink("harbor [611942]", "town [795742]");
-AppendSceneLink("harbor [611942]", "tropical island [793645]");
+AppendSceneLink("harbor [611941]", "town [795742]");
