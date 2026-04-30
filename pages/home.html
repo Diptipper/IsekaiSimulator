@@ -3,44 +3,156 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Isekai Simulator - Devlog</title>
+    
     <script>
-    MathJax={tex:{inlineMath:[['$','$']],displayMath:[['\\[','\\]']]},svg:{fontCache:'global'}};
+        MathJax = {
+            tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+            svg: { fontCache: 'global' }
+        };
     </script>
-    <script id="MathJax-script" async src="../src/MathJax/es5/tex-mml-chtml.js"></script>
-    <script src="../src/script.js"></script>
-    <title>Isekai Simulator</title>
-    <link rel="stylesheet" href="../src/style.css">
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 </head>
 <body>
-<div id="viewport">
-<p id="webheader"></p>
-<hr>
-<div id="nav1"></div>
-<hr>
-<div id="content">
-    This is a compendium dedicated to explaining the tech behind my game. I'm a physicist so I will focus mostly on the mathematical aspect. I will probably also write about Godot implementation if I find something interesting.
 
-    <h2>What is Isekai Simulator?</h2>
-    Isekai Simulator is a game I am still developing. The end goal is to make an open-world game similar to Skyrim but with all of its elements procedurally generated (procgen).
+    <div id="app">
+        <main id="feed"></main>
+    </div>
 
-    You see, many procgen games suffer from a common problem: the world is large but shallow. I plan to avoid this curse by making every area, every quest, and worldbuilding interesting. It's very ambitious. Keep reading if you are curious about how I'm doing it.
+    <script src="theme.js"></script>
 
-    <h2>Content</h2>
-    <ul>
-        <li> <a href="geography_node.html">Geography node</a>
-    </ul>
-</div>
-<hr>
-<div id="nav2">
-</div>
-<hr>
-<p id="webfooter"></p>
-</div>
-<script>
-    updatepage(`
-    <b>Next:</b>
-    <a href="geography_node.html">Geography node</a>
-    `);
-</script>
+    <script src="posts/post-introduction.js"></script>
+    <script src="posts/post-iter1.js"></script>
+    <script src="posts/post-iter2.js"></script>
+    <script src="posts/post-namegen.js"></script>
+    <script src="posts/post-iter3.js"></script>
+    <script src="posts/post-iter4.js"></script>
+    <script src="posts/post-iter5.js"></script>
+    <script src="posts/post-resign.js"></script>
+
+    <script>
+        // We now pass the 'allPosts' array into the parser so it knows what to list
+        function parseMarkdown(md, allPosts) {
+            const codeBlocks = [];
+            const mathBlocks = [];
+
+            // 1. Extract Code (Do this FIRST so code block comments are preserved)
+            md = md.replace(/```(\w*)\n([\s\S]*?)```/g, (match, lang, code) => {
+                codeBlocks.push(`<pre><code class="language-${lang}">${code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>`);
+                return `%%%CODE_${codeBlocks.length - 1}%%%`;
+            });
+
+            // 2. Extract Math
+            md = md.replace(/\$\$([\s\S]*?)\$\$/g, (match) => {
+                mathBlocks.push(match); return `%%%MATH_${mathBlocks.length - 1}%%%`;
+            });
+            md = md.replace(/\$([\s\S]*?)\$/g, (match) => {
+                mathBlocks.push(match); return `%%%MATH_${mathBlocks.length - 1}%%%`;
+            });
+
+            // NEW: 3. Strip Comments (Hidden from the final output)
+            // Multi-line: /* ... */
+            md = md.replace(/\/\*[\s\S]*?\*\//g, '');
+            // Single-line: // ... (The (?<!:) ensures we don't accidentally break https:// URLs)
+            md = md.replace(/(?<!:)\/\/.*$/gm, '');
+
+            // 4. Parse !content (Table of Contents)
+            md = md.replace(/!content/g, () => {
+                let tocHTML = `
+                    <div style="background: rgba(128,128,128,0.1); padding: 15px; border: 1px dashed rgba(128,128,128,0.5); margin: 20px 0;">
+                        <h3 style="margin-top: 0; border-bottom: none;">Contents:</h3>
+                        <ul style="margin-bottom: 0;">
+                `;
+                allPosts.forEach((p, index) => {
+                    tocHTML += `<li><a href="#post-${index}" style="color: inherit; font-weight: bold;">${p.title}</a></li>`;
+                });
+                tocHTML += '</ul></div>';
+                return tocHTML;
+            });
+
+            // 5. Parse Videos
+            md = md.replace(/!video\[([^\]]*)\]\(([^)]+)\)/g, '<figure><video controls style="max-width: 100%; border: 1px solid #8e8f8f;"><source src="$2" type="video/mp4"></video><figcaption>$1</figcaption></figure>');
+
+            // 6. Parse Images
+            md = md.replace(/!\[([^\]]+)\]\(([^)]+)\)/g, '<figure><img src="$2" alt="$1"><figcaption>$1</figcaption></figure>');
+
+            // 7. Parse Blockquotes
+            md = md.replace(/(^> .*\n?)+/gm, (match) => {
+                const cleanText = match.replace(/^> /gm, '');
+                return `<blockquote>${cleanText}</blockquote>`;
+            });
+
+            // 8. Parse Standard External Links
+            md = md.replace(/\[([^\]]+)\]\(((?:[^)(]+|\([^)(]*\))*)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" style="color: #0055ea; font-weight: bold; text-decoration: underline;">$1</a>');
+
+            // 9. Parse Text formatting
+            md = md.replace(/^### (.*$)/gm, '<h3>$1</h3>');
+            md = md.replace(/^## (.*$)/gm, '<h2>$1</h2>');
+            md = md.replace(/^# (.*$)/gm, '<h1>$1</h1>');
+            md = md.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+            md = md.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+            md = md.replace(/^\s*- (.*$)/gm, '<li>$1</li>');
+            md = md.replace(/(<li>.*<\/li>(\n<li>.*<\/li>)*)/gm, '<ul>$&</ul>');
+
+            // 10. Restore Code and Math
+            codeBlocks.forEach((block, i) => { md = md.replace(`%%%CODE_${i}%%%`, block); });
+            mathBlocks.forEach((block, i) => { md = md.replace(`%%%MATH_${i}%%%`, block); });
+
+            // 11. Line breaks
+            // Clean up any extra empty lines left behind by deleted comments
+            md = md.replace(/\n\s*\n/g, '<br><br>');
+
+            return md;
+        }
+
+        function renderBlog() {
+            const feed = document.getElementById('feed');
+            const posts = window.blogPosts || [];
+
+            if (posts.length === 0) {
+                feed.innerHTML = '<p>No posts found. C:\\ drive empty.</p>';
+                return;
+            }
+
+            // Create a copy so we don't mutate the original array when calling reverse()
+            const displayPosts = [...posts];//.reverse();
+
+            displayPosts.forEach(post => {
+                // Use the original array to find the correct index for the ID
+                const originalIndex = posts.indexOf(post);
+                
+                const article = document.createElement('article');
+                article.className = 'post-card window-border';
+                
+                // IMPORTANT: Assign an ID so the !content links can scroll here
+                article.id = `post-${originalIndex}`; 
+                
+                // Pass the unreversed 'posts' array to the parser for the !content tag
+                const htmlContent = parseMarkdown(post.content, posts);
+
+                article.innerHTML = `
+                    <div class="title-bar">
+                        <span>${post.title}</span>
+                        <div class="title-bar-controls">
+                            <div class="win-button">_</div>
+                            <div class="win-button">□</div>
+                            <div class="win-button close">X</div>
+                        </div>
+                    </div>
+                    <span class="post-date">Date modified: ${post.date}</span>
+                    <div class="post-body">
+                        ${htmlContent}
+                    </div>
+                `;
+                feed.appendChild(article);
+            });
+
+            if (window.MathJax) {
+                MathJax.typesetPromise();
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", renderBlog);
+    </script>
 </body>
 </html>
